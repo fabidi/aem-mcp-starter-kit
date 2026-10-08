@@ -32,20 +32,26 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "mcp[cli]>=1.3.0",
-    "fastmcp>=0.4.0",
-    "pydantic>=2.0.0",
-    "urllib3>=2.0.0",
+    "mcp[cli]==2.3.0",
+    "fastmcp==4.0.11",
+    "pydantic==2.13.5",
+    "urllib3==2.8.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/fabidi/aem-mcp-starter-kit"
+Repository = "https://github.com/fabidi/aem-mcp-starter-kit.git"
+Issues = "https://github.com/fabidi/aem-mcp-starter-kit/issues"
 
 [project.scripts]
 aem-mcp = "aem_mcp.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aem_mcp"]
+
