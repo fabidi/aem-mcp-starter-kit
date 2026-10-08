@@ -531,6 +531,137 @@ def submit_tool_recommendation(
     return json.dumps({"submitted": True, "status": "recorded"})
 
 
+@mcp.tool()
+def aem_lint_query_indexing(query: dict[str, Any]) -> str:
+    """
+    Lint an AEM QueryBuilder query for Apache Jackrabbit Oak indexing performance.
+    Detects unindexed property traversals, predicts Oak query plans, and generates
+    production-ready /oak:index definitions (JSON & FileVault XML) to prevent query timeouts.
+    """
+    search_path = query.get("path", "/content")
+    node_type = query.get("type", "nt:base")
+    fulltext = query.get("fulltext")
+
+    # Extract all filtered properties
+    filtered_props = []
+    if "property" in query:
+        filtered_props.append(str(query["property"]))
+
+    for k, v in query.items():
+        if re.match(r"^(\d+_)?property$", k) and k != "property":
+            filtered_props.append(str(v))
+        elif k in ("tagid", "1_tagid", "2_tagid") or k.endswith("_tagid"):
+            tag_prop = query.get("tagid.property", "jcr:content/cq:tags")
+            filtered_props.append(str(tag_prop))
+        elif k == "daterange.property":
+            filtered_props.append(str(v))
+
+    # Clean property names
+    filtered_props = list(dict.fromkeys(p.strip().lstrip("@") for p in filtered_props if p))
+
+    # Standard default Oak indexes
+    standard_indexed = {"jcr:primaryType", "jcr:uuid"}
+    unindexed = [p for p in filtered_props if p not in standard_indexed]
+
+    has_fulltext = bool(fulltext)
+    is_traversal = bool(unindexed) and not has_fulltext
+    risk_level = "CRITICAL" if is_traversal else ("OPTIMAL" if not unindexed else "WARNING")
+
+    # Build simulated Oak plan
+    if has_fulltext:
+        plan = f"[{node_type}] as [n] /* lucene:lucene(/oak:index/lucene) +:ancestors:{search_path} +fulltext:{fulltext} */"
+        diagnosis = "Query utilizes the out-of-the-box Oak Lucene fulltext index (/oak:index/lucene)."
+        advice = "Query execution is index-backed and optimal."
+    elif is_traversal:
+        plan = f"[{node_type}] as [n] /* traverse \"{search_path}//*\" where unindexed: {unindexed} */"
+        diagnosis = (
+            f"Query filters on custom properties {unindexed} without a covering Oak index under '{search_path}'. "
+            "Jackrabbit Oak will perform an unindexed repository traversal. If the path contains >10,000 nodes, "
+            "Oak will abort the query with an 'org.apache.jackrabbit.oak.query.FilterIterators: scan limit exceeded' exception."
+        )
+        advice = f"Define a custom Oak PropertyIndex or LuceneIndex for {unindexed} to ensure sub-millisecond lookups."
+    else:
+        plan = f"[{node_type}] as [n] /* property:nodetype(/oak:index/nodetype) where [n].[jcr:primaryType] = '{node_type}' */"
+        diagnosis = "Query matches node type using default Oak nodetype index."
+        advice = "Query execution is index-backed."
+
+    # Build recommended index definitions if traversal detected
+    remediations = {}
+    if unindexed:
+        first_prop = unindexed[0].replace("jcr:content/", "").replace("/", "_")
+        idx_name = f"{first_prop}Index"
+        
+        # Property index
+        prop_idx_json = {
+            "jcr:primaryType": "oak:QueryIndexDefinition",
+            "type": "property",
+            "propertyNames": unindexed,
+            "declaringNodeTypes": [node_type] if node_type != "nt:base" else [],
+            "reindex": True
+        }
+        
+        # Lucene index
+        lucene_rule_props = {}
+        for p in unindexed:
+            cname = p.replace(":", "_").replace("/", "_")
+            lucene_rule_props[cname] = {
+                "jcr:primaryType": "nt:unstructured",
+                "name": p,
+                "propertyIndex": True,
+                "ordered": True
+            }
+
+        lucene_idx_json = {
+            "jcr:primaryType": "oak:QueryIndexDefinition",
+            "type": "lucene",
+            "async": ["async", "nrt"],
+            "compatVersion": 2,
+            "evaluatePathRestrictions": True,
+            "reindex": True,
+            "indexRules": {
+                "jcr:primaryType": "nt:unstructured",
+                node_type: {
+                    "jcr:primaryType": "nt:unstructured",
+                    "properties": {
+                        "jcr:primaryType": "nt:unstructured",
+                        **lucene_rule_props
+                    }
+                }
+            }
+        }
+
+        remediations["property_index"] = {
+            "path": f"/oak:index/{idx_name}",
+            "json": prop_idx_json,
+            "filevault_xml": (
+                f'<?xml version="1.0" encoding="UTF-8"?>\n'
+                f'<jcr:root xmlns:jcr="http://www.jcp.org/jcr/1.0" xmlns:oak="http://jackrabbit.apache.org/oak/ns/1.0"\n'
+                f'    jcr:primaryType="oak:QueryIndexDefinition"\n'
+                f'    type="property"\n'
+                f'    reindex="{{Boolean}}true"\n'
+                f'    propertyNames="[{",".join(unindexed)}]"/>'
+            )
+        }
+        remediations["lucene_index"] = {
+            "path": f"/oak:index/{idx_name}Lucene",
+            "json": lucene_idx_json
+        }
+
+    report = {
+        "search_path": search_path,
+        "node_type": node_type,
+        "risk_level": risk_level,
+        "is_traversal": is_traversal,
+        "filtered_properties": filtered_props,
+        "unindexed_properties": unindexed,
+        "simulated_oak_plan": plan,
+        "diagnosis": diagnosis,
+        "advice": advice,
+        "recommended_indexes": remediations
+    }
+    return json.dumps(report, ensure_ascii=False, indent=2)
+
+
 def main():
     mcp.run()
 

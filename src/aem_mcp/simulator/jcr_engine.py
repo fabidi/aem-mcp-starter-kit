@@ -127,6 +127,40 @@ class JcrEngine:
                 prop_op = query.get(f"{prefix}_property.operation", "equals")
                 property_filters.append((val, prop_val, prop_op))
 
+        # Check for Oak explain request
+        is_explain = str(query.get("p.explain", "false")).lower() in ("true", "1")
+        if is_explain:
+            if fulltext:
+                index_used = "lucene"
+                plan = f"[{node_type or 'nt:base'}] as [n] /* lucene:lucene(/oak:index/lucene) +:ancestors:{search_path} +fulltext:{fulltext} */"
+                is_traversal = False
+                risk_level = "OPTIMAL"
+            elif property_filters:
+                index_used = "traverse"
+                plan = f"[{node_type or 'nt:base'}] as [n] /* traverse \"{search_path}//*\" where {property_filters} */"
+                is_traversal = True
+                risk_level = "CRITICAL"
+            elif node_type:
+                index_used = "nodetype"
+                plan = f"[{node_type}] as [n] /* property:nodetype(/oak:index/nodetype) where [n].[jcr:primaryType] = '{node_type}' */"
+                is_traversal = False
+                risk_level = "OPTIMAL"
+            else:
+                index_used = "traverse"
+                plan = f"[nt:base] as [n] /* traverse \"{search_path}//*\" */"
+                is_traversal = True
+                risk_level = "CRITICAL"
+
+            return {
+                "success": True,
+                "explain": True,
+                "plan": plan,
+                "index_used": index_used,
+                "is_traversal": is_traversal,
+                "risk_level": risk_level,
+                "simulated_scanned_nodes": len(self._nodes),
+            }
+
         hits = []
 
         for path, node in self._nodes.items():
