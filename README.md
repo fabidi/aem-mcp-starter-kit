@@ -58,7 +58,7 @@ flowchart TD
 Clone the repository and install with `uv` (recommended) or `pip`:
 
 ```bash
-git clone https://github.com/your-username/aem-mcp-starter-kit.git
+git clone https://github.com/fabidi/aem-mcp-starter-kit.git
 cd aem-mcp-starter-kit
 
 # Using uv (fastest)
