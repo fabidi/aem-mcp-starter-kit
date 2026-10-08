@@ -38,11 +38,15 @@ flowchart TD
 
 ---
 
+> [!NOTE]
+> **Fictional Demo Domain Notice:**
+> **"Novaria Hospitality Group"** (`novariahotels.com`) and all associated brand tiers (*Novaria Grand*, *Novaria House*, *Solstice Resorts*, *Novaria Select*), property names, personnel, and geolocations are 100% fictional demo entities created strictly for testing, agentic RAG evaluation, and open-source demonstration. Any resemblance to actual hospitality companies, operating properties, or registered trademarks is purely coincidental.
+
 ## Key Features
 
 1. **Zero-Cost Offline JCR Simulator:**
    - Clone and run immediately on your laptop without needing an expensive Adobe Cloud license.
-   - Includes 110+ realistic synthetic properties across 35 global cities under the neutral **Meridian Hospitality Group** domain.
+   - Includes 1,000 canonical synthetic properties across 50 international destinations, 11,000+ JCR nodes, and 350 deliberate audit anomalies under the fictional **Novaria Hospitality Group** demo domain.
 2. **Dual-System Reconciliation (AEM CMS + Master Entity Registry):**
    - Combines authored marketing content (AEM JCR) with canonical business truths (Property Master database) to pinpoint discrepancies (e.g. stale star ratings, outdated amenities).
 3. **In-Memory SQLite Dataset Materialization:**
@@ -76,8 +80,8 @@ pip install -e ".[dev]"
 python tools/generate_dataset.py
 ```
 This generates:
-- `data/property_master.sqlite` (110 hotels, 4 brand tiers, 35 cities)
-- `data/jcr_mock_store.json` (400+ JCR nodes with intentional audit discrepancies)
+- `data/property_master.sqlite` (1,000 canonical hotels, 4 brand tiers, 50 global destinations)
+- `data/jcr_mock_store.json` (11,000+ JCR nodes with 350 deliberate audit anomalies across 9 categories)
 
 ### 3. Run the Test Suite
 ```bash
@@ -166,10 +170,18 @@ Add to your project's `.cursor/mcp.json`:
 | :--- | :--- |
 | `aem_json(path, depth)` | Read raw JCR node hierarchy using standard Sling `.json` selectors (depth 0..3). |
 | `aem_traverse(path, depth)` | Explore child nodes and descendant levels. |
-| `aem_querybuilder(query)` | Execute bounded AEM QueryBuilder predicate searches (`path`, `type`, `fulltext`, `property`). |
+| `aem_querybuilder(query)` | Execute bounded AEM QueryBuilder predicate searches with execution timing profiling. |
 | `aem_find_references(path)` | Recursively discover referenced templates, models, Content Fragments, and assets. |
 | `aem_discover_properties(path, focus_term, node_type)` | Discover property usage and observed values across child nodes. |
 | `aem_query_dataset(query, properties)` | Materialize large QueryBuilder search results into an in-memory SQLite table. |
+
+### Content & Discrepancy Auditing Tools
+| Tool | Description |
+| :--- | :--- |
+| `aem_audit_content_integrity(root_path)` | Scan content trees for broken DAM hero assets, expired promo campaigns, and incomplete Content Fragments. |
+| `aem_audit_cross_reference(path)` | Reconcile AEM authored properties against Canonical PMS database (star ratings, booking status, amenity desyncs, orphan pages). |
+| `aem_audit_localization_coverage(base_locale, target_locales)` | Measure regional translation parity and pinpoint missing localized pages across target locales (e.g. `fr/fr`, `de/de`, `jp/ja`). |
+| `aem_compile_querybuilder_sql2(query)` | Compile QueryBuilder predicates into Oak-optimized JCR-SQL2 for index tuning and developer analysis. |
 
 ### Dataset Analysis & Export Tools
 | Tool | Description |
@@ -188,7 +200,7 @@ Add to your project's `.cursor/mcp.json`:
 Once connected to Claude or ChatGPT:
 
 1. **Content Discovery:**
-   > *"Find all luxury hotels in Europe under `/content/meridian` and show me their template and Content Fragment references."*
+   > *"Find all luxury hotels in Europe under `/content/novaria` and show me their template and Content Fragment references."*
 
 2. **Cross-System Audit:**
    > *"Audit our European property pages against the Master Entity Registry. Are there any discrepancies between the authored star ratings on AEM pages and the canonical Property Master?"*

@@ -32,6 +32,10 @@ class JcrEngine:
     def total_nodes(self) -> int:
         return len(self._nodes)
 
+    @property
+    def all_nodes(self) -> dict[str, dict[str, Any]]:
+        return self._nodes
+
     def get_node(self, path: str) -> dict[str, Any] | None:
         clean_path = path.rstrip("/")
         return self._nodes.get(clean_path)

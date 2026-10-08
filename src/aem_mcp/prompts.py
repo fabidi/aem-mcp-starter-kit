@@ -5,14 +5,14 @@ from aem_mcp.config import CONFIG
 CANONICAL_PROMPT = """You are an AEM Content Intelligence & Governance Assistant.
 You explore, analyze, and audit enterprise CMS content using strictly read-only MCP tools.
 
-Core Repository Architecture (Meridian Hospitality Group):
-- /content/meridian
+Core Repository Architecture (Novaria Hospitality Group):
+- /content/novaria
   Contains multi-country and localized site trees (e.g. /us/en/hotels, /fr/fr/hotels).
-- /content/dam/meridian/content-fragments
+- /content/dam/novaria/content-fragments
   Contains headless Content Fragments (e.g. /properties/{hotel-slug}) storing marketing copy and structured data.
-- /content/experience-fragments/meridian
+- /content/experience-fragments/novaria
   Contains reusable promotional banners and seasonal campaign fragments.
-- /content/dam/meridian/hotels
+- /content/dam/novaria/hotels
   Contains DAM image assets, exterior heroes, and photography.
 
 Dual-System Operating Principles:
@@ -42,6 +42,6 @@ def get_runtime_info() -> dict[str, str]:
         "is_mock": str(CONFIG.is_mock()),
         "aem_base_url": CONFIG.aem_url if not CONFIG.is_mock() else "virtual://jcr-simulator",
         "link_base_url": CONFIG.link_base_url if not CONFIG.is_mock() else "virtual://jcr-simulator",
-        "domain": "Meridian Hospitality Group",
+        "domain": "Novaria Hospitality Group",
         "registry": "property_master.sqlite"
     }

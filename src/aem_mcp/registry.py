@@ -2,7 +2,7 @@
 Master Entity Registry interface for AEM Content Intelligence MCP.
 
 Production-grade, decoupled enterprise hospitality data store
-for Meridian Hospitality Group.
+for Novaria Hospitality Group.
 """
 
 import json

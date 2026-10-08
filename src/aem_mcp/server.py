@@ -24,11 +24,17 @@ except ImportError:
     except ImportError:
         from mcp.server.mcpserver import MCPServer as FastMCP
 
+import time
 from aem_mcp.auth.ims import AdobeImsAuthProvider
 from aem_mcp.config import CONFIG, ROOT_DIR
 from aem_mcp.prompts import CANONICAL_PROMPT, get_runtime_info
 from aem_mcp.registry import get_registry_indexes, search_registry, get_registry_entity
 from aem_mcp.simulator.jcr_engine import JcrEngine
+from aem_mcp.audit import (
+    audit_content_integrity,
+    audit_cross_reference,
+    audit_localization_coverage
+)
 from aem_mcp.datasets.engine import (
     materialize_dataset,
     get_dataset_metadata,
@@ -168,10 +174,13 @@ def aem_querybuilder(query: dict[str, str]) -> str:
     if limit > 1000:
         raise ValueError("QueryBuilder p.limit must not exceed 1000.")
 
+    start_time = time.perf_counter()
     data = _get_aem_json("/bin/querybuilder", query)
+    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
     return json.dumps({
         "mode": CONFIG.mode,
         "query": query,
+        "execution_time_ms": duration_ms,
         "data": data
     }, ensure_ascii=False, indent=2)
 
@@ -266,6 +275,7 @@ def aem_query_dataset(
     pages = 0
     complete = True
 
+    start_time = time.perf_counter()
     while len(rows) < max_records:
         page_query = {**query, "p.limit": str(page_size), "p.offset": str(offset)}
         res = _get_aem_json("/bin/querybuilder", page_query)
@@ -298,11 +308,13 @@ def aem_query_dataset(
             "complete": complete,
         }
     )
+    duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
     return json.dumps({
         "dataset_id": ds_id,
         "row_count": len(rows),
         "pages_fetched": pages,
+        "execution_time_ms": duration_ms,
         "complete": complete,
         "sample": rows[:5],
         "next": f"Use dataset_analyze(dataset_id='{ds_id}', operation='group_by', field='...') or dataset_export"
@@ -377,6 +389,92 @@ def dataset_discard(dataset_id: str) -> str:
     """Delete a temporary materialized dataset and free storage."""
     deleted = discard_dataset(dataset_id)
     return json.dumps({"dataset_id": dataset_id, "deleted": deleted})
+
+
+# --- Content & Discrepancy Auditing Tools ---
+
+@mcp.tool()
+def aem_audit_content_integrity(
+    root_path: str = "/content/novaria",
+    check_assets: bool = True,
+    check_promos: bool = True,
+    check_fragments: bool = True,
+    limit: int = 100
+) -> str:
+    """Audit AEM pages under root_path for broken DAM assets, expired campaigns, and incomplete content fragments."""
+    all_nodes = _SIMULATOR.all_nodes if _SIMULATOR is not None else None
+    res = audit_content_integrity(
+        node_getter=lambda p: _get_aem_json(p),
+        root_path=root_path,
+        check_assets=check_assets,
+        check_promos=check_promos,
+        check_fragments=check_fragments,
+        limit=limit,
+        all_nodes=all_nodes
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def aem_audit_cross_reference(
+    path: str = "/content/novaria/us/en/hotels",
+    limit: int = 100
+) -> str:
+    """Cross-reference AEM authored properties against Canonical Master Entity Registry (PMS database) for ratings, status, amenities, and orphans."""
+    all_nodes = _SIMULATOR.all_nodes if _SIMULATOR is not None else None
+    res = audit_cross_reference(
+        node_getter=lambda p: _get_aem_json(p),
+        path=path,
+        limit=limit,
+        all_nodes=all_nodes
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def aem_audit_localization_coverage(
+    base_locale: str = "us/en",
+    target_locales: list[str] | None = None,
+    subpath: str = "hotels",
+    limit: int = 50
+) -> str:
+    """Audit multi-region localization coverage comparing canonical base locale against target regional sites (e.g. fr/fr, de/de, jp/ja)."""
+    all_nodes = _SIMULATOR.all_nodes if _SIMULATOR is not None else {}
+    res = audit_localization_coverage(
+        all_nodes=all_nodes,
+        base_locale=base_locale,
+        target_locales=target_locales,
+        subpath=subpath,
+        limit=limit
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+@mcp.tool()
+def aem_compile_querybuilder_sql2(query: dict[str, str]) -> str:
+    """Compile an AEM QueryBuilder predicate map into an optimized Jackrabbit Oak JCR-SQL2 query for index analysis."""
+    try:
+        from sling_querybuilder import QueryBuilderCompiler
+        compiled = QueryBuilderCompiler(query).compile()
+        sql2 = compiled.sql2
+        provider = "sling-querybuilder"
+    except ImportError:
+        p = query.get("path", "/content")
+        t = query.get("type", "nt:base")
+        clauses = [f"ISDESCENDANTNODE(n, '{p}')"]
+        if "property" in query and "property.value" in query:
+            prop = query["property"]
+            val = query["property.value"]
+            clauses.append(f"n.[{prop}] = '{val}'")
+        where = " AND ".join(clauses)
+        sql2 = f"SELECT * FROM [{t}] AS n WHERE {where}"
+        provider = "builtin_basic_compiler"
+
+    return json.dumps({
+        "compiler": provider,
+        "querybuilder": query,
+        "jcr_sql2": sql2
+    }, indent=2)
 
 
 # --- Sandboxed In-Memory Analysis & Feedback ---

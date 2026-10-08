@@ -20,14 +20,14 @@ def test_jcr_engine_loads_nodes(engine):
 
 
 def test_get_json_depth_0(engine):
-    data = engine.get_json("/content/meridian/us/en", depth=0)
+    data = engine.get_json("/content/novaria/us/en", depth=0)
     assert data["jcr:primaryType"] == "cq:Page"
     assert "hotels" in data
     assert data["hotels"]["jcr:primaryType"] == "cq:Page"
 
 
 def test_get_json_depth_1(engine):
-    data = engine.get_json("/content/meridian/us/en", depth=1)
+    data = engine.get_json("/content/novaria/us/en", depth=1)
     assert data["jcr:primaryType"] == "cq:Page"
     assert "hotels" in data
     assert "jcr:content" in data["hotels"]
@@ -35,7 +35,7 @@ def test_get_json_depth_1(engine):
 
 def test_querybuilder_by_type(engine):
     res = engine.querybuilder({
-        "path": "/content/meridian/us/en/hotels",
+        "path": "/content/novaria/us/en/hotels",
         "type": "cq:Page",
         "p.limit": "50"
     })
@@ -43,14 +43,14 @@ def test_querybuilder_by_type(engine):
     assert res["total"] > 20
     assert len(res["hits"]) == min(res["total"], 50)
     for hit in res["hits"]:
-        assert hit["jcr:path"].startswith("/content/meridian/us/en/hotels")
+        assert hit["jcr:path"].startswith("/content/novaria/us/en/hotels")
 
 
 def test_querybuilder_property_filter(engine):
     res = engine.querybuilder({
-        "path": "/content/meridian/us/en/hotels",
+        "path": "/content/novaria/us/en/hotels",
         "property": "hotelId",
-        "property.value": "MDN-NYC-001"
+        "property.value": "NVR-NYC-0001"
     })
     assert res["success"] is True
     assert res["total"] == 1
@@ -59,7 +59,7 @@ def test_querybuilder_property_filter(engine):
 
 def test_querybuilder_fulltext(engine):
     res = engine.querybuilder({
-        "path": "/content/meridian/us/en/hotels",
+        "path": "/content/novaria/us/en/hotels",
         "fulltext": "grand",
         "p.limit": "10"
     })
@@ -70,7 +70,7 @@ def test_querybuilder_fulltext(engine):
 def test_find_references(engine):
     # Find any actual hotel page that has a hotelId
     res = engine.querybuilder({
-        "path": "/content/meridian/us/en/hotels",
+        "path": "/content/novaria/us/en/hotels",
         "property": "hotelId",
         "property.operation": "exists",
         "p.limit": "1"
@@ -80,6 +80,6 @@ def test_find_references(engine):
     refs = engine.find_references(hotel_path)
     assert len(refs) > 0
     # Must reference template and DAM content fragment
-    assert any("/conf/meridian/settings/wcm/templates" in r for r in refs)
-    assert any("/content/dam/meridian/content-fragments" in r for r in refs)
+    assert any("/conf/novaria/settings/wcm/templates" in r for r in refs)
+    assert any("/content/dam/novaria/content-fragments" in r for r in refs)
 

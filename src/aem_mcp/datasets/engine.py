@@ -101,7 +101,7 @@ def get_dataset_metadata(dataset_id: str) -> dict[str, Any]:
 
 def get_dataset_rows(dataset_id: str, offset: int = 0, limit: int = 100) -> list[dict[str, Any]]:
     offset = max(int(offset), 0)
-    limit = min(max(int(limit), 1), 1000)
+    limit = min(max(int(limit), 1), 100000)
     conn = _dataset_connection(dataset_id)
     try:
         records = conn.execute(
