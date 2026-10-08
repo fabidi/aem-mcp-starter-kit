@@ -189,6 +189,7 @@ Add to your project's `.cursor/mcp.json`:
 | `aem_audit_cross_reference(path)` | Reconcile AEM authored properties against Canonical PMS database (star ratings, booking status, amenity desyncs, orphan pages). |
 | `aem_audit_localization_coverage(base_locale, target_locales)` | Measure regional translation parity and pinpoint missing localized pages across target locales (e.g. `fr/fr`, `de/de`, `jp/ja`). |
 | `aem_compile_querybuilder_sql2(query)` | Compile QueryBuilder predicates into Oak-optimized JCR-SQL2 for index tuning and developer analysis. |
+| `aem_lint_query_indexing(query, simulate_cost)` | Detect unindexed Oak traversals, evaluate 10,000-node scan abort risk, and generate remediation `/oak:index` definitions. |
 
 ### Dataset Analysis & Export Tools
 | Tool | Description |
