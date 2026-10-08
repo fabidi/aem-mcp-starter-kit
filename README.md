@@ -83,7 +83,14 @@ This generates:
 - `data/property_master.sqlite` (1,000 canonical hotels, 4 brand tiers, 50 global destinations)
 - `data/jcr_mock_store.json` (11,000+ JCR nodes with 350 deliberate audit anomalies across 9 categories)
 
-### 3. Run the Test Suite
+### 3. Run Autonomous Agent Audit Simulation
+Simulate how an autonomous AI Assistant (e.g. Claude 3.7 or ChatGPT) executes an end-to-end 6-phase content intelligence audit across 11,000+ nodes, reconciles PMS records, and generates an Excel report in under 2 seconds:
+
+```bash
+python tools/simulate_agent_audit.py
+```
+
+### 4. Run the Test Suite
 ```bash
 pytest -v
 ```
