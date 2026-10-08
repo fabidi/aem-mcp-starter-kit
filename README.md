@@ -4,9 +4,9 @@
 > *Demonstrating Agentic RAG over Native Structured Systems vs. Brittle Vector Databases.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/fabidi/aem-mcp-starter-kit/actions/workflows/ci.yml/badge.svg)](https://github.com/fabidi/aem-mcp-starter-kit/actions/workflows/ci.yml)
 [![FastMCP](https://img.shields.io/badge/FastMCP-Enabled-green.svg)](https://gofastmcp.com/)
-[![Tests](https://img.shields.io/badge/Tests-19%20Passed-brightgreen.svg)]()
 
 ---
 
