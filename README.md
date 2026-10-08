@@ -30,10 +30,10 @@ flowchart TD
         EntityMaster["Master Entity Registry<br/>(SQLite / PIM / CRS)<br/>• Canonical Property Master<br/>• Brands, Amenities, Geocodes"]
     end
 
-    Client <-->|Model Context Protocol| MCP
-    MCP <-->|Live Mode (AEM_MODE=live)| LiveAEM
-    MCP <-->|Mock Mode (AEM_MODE=mock)| MockJCR
-    MCP <-->|Both Modes| EntityMaster
+    Client <-->|"Model Context Protocol"| MCP
+    MCP <-->|"Live Mode (AEM_MODE=live)"| LiveAEM
+    MCP <-->|"Mock Mode (AEM_MODE=mock)"| MockJCR
+    MCP <-->|"Both Modes"| EntityMaster
 ```
 
 ---
