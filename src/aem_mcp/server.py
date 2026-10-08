@@ -24,6 +24,7 @@ except ImportError:
     except ImportError:
         from mcp.server.mcpserver import MCPServer as FastMCP
 
+from aem_mcp.auth.ims import AdobeImsAuthProvider
 from aem_mcp.config import CONFIG, ROOT_DIR
 from aem_mcp.prompts import CANONICAL_PROMPT, get_runtime_info
 from aem_mcp.registry import get_registry_indexes, search_registry, get_registry_entity
@@ -45,8 +46,6 @@ mcp = FastMCP(
     "AEM Content Intelligence",
     instructions=CANONICAL_PROMPT
 )
-
-from aem_mcp.auth.ims import AdobeImsAuthProvider
 
 # Simulator instance when in mock mode
 _SIMULATOR: JcrEngine | None = None
