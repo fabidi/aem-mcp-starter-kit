@@ -8,6 +8,7 @@ from aem_mcp.server import (
     registry_indexes,
     registry_search,
     registry_get,
+    registry_query_dataset,
     aem_json,
     aem_traverse,
     aem_querybuilder,
@@ -48,6 +49,25 @@ def test_registry_search_and_get():
     assert get_res["found"] is True
     assert get_res["record"]["hotel_id"] == hotel_id
     assert get_res["record"]["city"] == "Paris"
+
+
+def test_registry_query_dataset():
+    """Verify materialization of non-AEM canonical master records into SQLite dataset."""
+    raw = registry_query_dataset(index="properties", max_records=25)
+    res = json.loads(raw)
+    assert "dataset_id" in res
+    assert res["row_count"] > 0
+    assert res["index"] == "properties"
+    assert len(res["sample"]) <= 5
+
+    ds_id = res["dataset_id"]
+    try:
+        # Verify dataset metadata and rows
+        info = json.loads(dataset_info(dataset_id=ds_id))
+        assert info["row_count"] == res["row_count"]
+        assert "registry_properties" in info["source"]
+    finally:
+        dataset_discard(ds_id)
 
 
 def test_aem_json_and_traverse():

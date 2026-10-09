@@ -70,6 +70,37 @@ flowchart TD
 
 ---
 
+## 🔌 Adapting to Your Domain & External Data Sources
+
+This MCP server is **not hardcoded to hospitality**. It uses a declarative domain profile architecture that allows you to connect **any enterprise system of record** (ERP, PIM, CRM, or Product Catalog) to audit against AEM content in 3 simple steps:
+
+1. **Create your domain folder:** `mkdir domains/my-domain`
+2. **Add your data source:** Drop your `.sqlite`, `.csv`, or `.json` file into the folder (or configure external Postgres/Snowflake connection strings).
+3. **Declare `domain.yaml`:** Map your external columns to AEM JCR properties and define compliance audit rules.
+
+```yaml
+# Example: domains/automotive/domain.yaml
+domain:
+  name: "Apex Motor Works"
+  root_path: "/content/apex"
+entity:
+  primary_entity: "Vehicle"
+  type: "csv"
+  file: "registry.csv"
+mapping:
+  fields:
+    vin_prefix: "vinPrefix"      # ERP column <-> AEM JCR property
+    base_msrp: "msrp"
+audit_rules:
+  - id: "msrp_desync"
+    condition: "aem.msrp != registry.base_msrp"
+    message: "Authored price does not match ERP manufacturing master"
+```
+
+👉 **Read the complete guide:** [**Extending Data Sources & Custom Domain Guide**](docs/EXTENDING_DATA_SOURCES.md) for detailed blueprints covering E-Commerce, Automotive, Finance/Insurance, and Healthcare.
+
+---
+
 ## 60-Second Quickstart
 
 ### 1. Installation
@@ -194,6 +225,7 @@ Add to your project's `.cursor/mcp.json`:
 | `registry_indexes()` | List available business entity tables (`properties`, `brands`, `destinations`, etc.). |
 | `registry_search(index, query, city, brand, limit)` | Search canonical records with structured filters. |
 | `registry_get(index, identifier)` | Lookup canonical record by primary ID (`hotel_id`, `model_id`, `product_id`). |
+| `registry_query_dataset(index, query, max_records)` | Stream and materialize canonical records into an on-disk SQLite dataset table for cross-system reconciliation. |
 
 ### AEM Read-Only Tools
 | Tool | Description |

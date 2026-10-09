@@ -148,6 +148,40 @@ def registry_get(index: str, identifier: str) -> str:
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
+@mcp.tool()
+def registry_query_dataset(
+    index: str,
+    query: str = "",
+    city: str = "",
+    brand: str = "",
+    max_records: int = 100000
+) -> str:
+    """
+    Materialize records from the active Master Entity Registry into an on-disk SQLite dataset table.
+    Enables cross-system joins (dataset_match) between canonical enterprise data and AEM content.
+    Supports any active domain format (SQLite, CSV, JSON, or external enterprise databases).
+    """
+    res = search_registry(index=index, query=query, city=city, brand=brand, limit=max_records)
+    records = res.get("results", [])
+    ds_id = materialize_dataset(
+        rows=records,
+        metadata={
+            "source": f"registry_{index}",
+            "index": index,
+            "query": query,
+            "domain": DOMAIN_MANAGER.active_domain_id,
+        }
+    )
+    return json.dumps({
+        "dataset_id": ds_id,
+        "row_count": len(records),
+        "index": index,
+        "domain": DOMAIN_MANAGER.active_domain_id,
+        "sample": records[:5],
+        "next": f"Use dataset_match(left_dataset_id='<aem_dataset_id>', right_dataset_id='{ds_id}', left_field='...', right_field='...')"
+    }, ensure_ascii=False, indent=2)
+
+
 # --- AEM Core Read-Only Tools ---
 
 @mcp.tool()
