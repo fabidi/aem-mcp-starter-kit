@@ -59,33 +59,80 @@ def _dataset_connection(dataset_id: str) -> sqlite3.Connection:
     return conn
 
 
-def materialize_dataset(rows: list[dict[str, Any]], metadata: dict[str, Any]) -> str:
-    """Store rows into a dedicated SQLite dataset table and return dataset_id."""
-    dataset_id = "ds_" + uuid.uuid4().hex[:12]
-    conn = _dataset_connection(dataset_id)
-    try:
-        conn.executescript(
+class StreamingDatasetBuilder:
+    """
+    Incremental dataset writer that streams batches into an on-disk SQLite database.
+    Maintains a bounded memory footprint O(batch_size) and configures SQLite WAL mode
+    with a bounded cache ceiling (~8MB).
+    """
+    def __init__(self, metadata: dict[str, Any] | None = None):
+        self.dataset_id = "ds_" + uuid.uuid4().hex[:12]
+        self.conn = _dataset_connection(self.dataset_id)
+        self.conn.execute("PRAGMA journal_mode = WAL;")
+        self.conn.execute("PRAGMA synchronous = NORMAL;")
+        self.conn.execute("PRAGMA cache_size = -8000;")
+        self.conn.executescript(
             "CREATE TABLE metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);"
             "CREATE TABLE rows (row_number INTEGER PRIMARY KEY, data TEXT NOT NULL);"
         )
-        conn.executemany(
-            "INSERT INTO rows (row_number, data) VALUES (?, ?)",
-            ((idx, json.dumps(row, ensure_ascii=False)) for idx, row in enumerate(rows))
-        )
-        meta_dict = {
-            "dataset_id": dataset_id,
-            "row_count": len(rows),
+        self.row_count = 0
+        self.metadata = {
+            "dataset_id": self.dataset_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            **metadata,
+            **(metadata or {})
         }
-        conn.executemany(
-            "INSERT INTO metadata (key, value) VALUES (?, ?)",
-            ((k, json.dumps(v, ensure_ascii=False)) for k, v in meta_dict.items())
+        self._closed = False
+
+    def append_batch(self, rows: list[dict[str, Any]]) -> int:
+        """Append a batch of rows to the SQLite table."""
+        if not rows or self._closed:
+            return 0
+        start_idx = self.row_count
+        self.conn.executemany(
+            "INSERT INTO rows (row_number, data) VALUES (?, ?)",
+            ((start_idx + i, json.dumps(r, ensure_ascii=False)) for i, r in enumerate(rows))
         )
-        conn.commit()
-    finally:
-        conn.close()
-    return dataset_id
+        self.row_count += len(rows)
+        self.conn.commit()
+        return len(rows)
+
+    def close(self, extra_metadata: dict[str, Any] | None = None) -> str:
+        """Finalize metadata and close the connection."""
+        if self._closed:
+            return self.dataset_id
+        try:
+            if extra_metadata:
+                self.metadata.update(extra_metadata)
+            self.metadata["row_count"] = self.row_count
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+                ((k, json.dumps(v, ensure_ascii=False)) for k, v in self.metadata.items())
+            )
+            self.conn.commit()
+        finally:
+            self.conn.close()
+            self._closed = True
+        return self.dataset_id
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            try:
+                self.conn.close()
+                self._closed = True
+            except Exception:
+                pass
+        else:
+            self.close()
+
+
+def materialize_dataset(rows: list[dict[str, Any]], metadata: dict[str, Any]) -> str:
+    """Store rows into a dedicated SQLite dataset table and return dataset_id."""
+    with StreamingDatasetBuilder(metadata=metadata) as builder:
+        builder.append_batch(rows)
+    return builder.dataset_id
 
 
 def get_dataset_metadata(dataset_id: str) -> dict[str, Any]:

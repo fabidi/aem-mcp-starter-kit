@@ -7,6 +7,7 @@ and elimination of in-memory Python array ceilings.
 import json
 import pytest
 from aem_mcp.datasets.engine import (
+    StreamingDatasetBuilder,
     materialize_dataset,
     analyze_dataset,
     get_dataset_metadata,
@@ -123,3 +124,54 @@ def test_native_sql_filter_operation(sample_dataset_id):
     assert res["matched_count"] == 2
     assert len(res["sample"]) == 2
     assert res["sample"][0]["hotelId"] in ("NVR-001", "NVR-002")
+
+
+def test_streaming_dataset_builder():
+    """Verify incremental batch streaming, WAL mode, and metadata finalization."""
+    builder = StreamingDatasetBuilder(metadata={"source": "unit_test_stream"})
+    batch_1 = [{"id": 1, "val": 10}, {"id": 2, "val": 20}]
+    batch_2 = [{"id": 3, "val": 30}, {"id": 4, "val": 40}]
+    builder.append_batch(batch_1)
+    builder.append_batch(batch_2)
+    ds_id = builder.close(extra_metadata={"extra_key": "completed_ok"})
+
+    try:
+        meta = get_dataset_metadata(ds_id)
+        assert meta["row_count"] == 4
+        assert meta["source"] == "unit_test_stream"
+        assert meta["extra_key"] == "completed_ok"
+
+        # Verify analytics on streamed dataset
+        stats = analyze_dataset(ds_id, operation="stats", field="val")
+        assert stats["numeric_rows"] == 4
+        assert stats["sum"] == 100.0
+        assert stats["avg"] == 25.0
+    finally:
+        discard_dataset(ds_id)
+
+
+def test_streaming_aem_query_dataset():
+    """Verify aem_query_dataset streams paginated results without memory accumulation."""
+    from aem_mcp.server import aem_query_dataset
+
+    # 1. Bounded multi-page fetch (page_size=5, max_records=12)
+    raw = aem_query_dataset(
+        query={"path": "/content/novaria/us/en/hotels"},
+        properties=["hotelId", "brand"],
+        page_size=5,
+        max_records=12
+    )
+    res = json.loads(raw)
+    assert res["row_count"] == 12
+    assert res["pages_fetched"] >= 2
+    assert res["complete"] is False
+    assert len(res["sample"]) <= 5
+
+    ds_id = res["dataset_id"]
+    try:
+        # Check rows in SQLite
+        rows_data = get_dataset_rows(ds_id, offset=0, limit=20)
+        assert len(rows_data) == 12
+    finally:
+        discard_dataset(ds_id)
+

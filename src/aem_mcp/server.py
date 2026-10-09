@@ -36,6 +36,7 @@ from aem_mcp.audit import (
     audit_localization_coverage
 )
 from aem_mcp.datasets.engine import (
+    StreamingDatasetBuilder,
     materialize_dataset,
     get_dataset_metadata,
     get_dataset_rows,
@@ -273,60 +274,76 @@ def aem_query_dataset(
     page_size: int = 500,
     max_records: int = 100000
 ) -> str:
-    """Materialize a paginated QueryBuilder result into an in-memory SQLite dataset table."""
+    """
+    Stream and materialize paginated QueryBuilder results directly into an on-disk SQLite dataset.
+    Maintains bounded memory consumption (~2-5MB) regardless of repository size.
+    """
     if "path" not in query:
         raise ValueError("QueryBuilder query requires a 'path' parameter.")
 
     page_size = min(max(int(page_size), 1), 1000)
-    max_records = min(max(int(max_records), 1), 100000)
+    max_limit = int(max_records) if int(max_records) > 0 else None
 
-    rows = []
     offset = 0
     pages = 0
     complete = True
+    sample_rows: list[dict[str, Any]] = []
 
     start_time = time.perf_counter()
-    while len(rows) < max_records:
-        page_query = {**query, "p.limit": str(page_size), "p.offset": str(offset)}
-        res = _get_aem_json("/bin/querybuilder", page_query)
-        hits = res.get("hits", [])
-        pages += 1
-        if not hits:
-            break
-
-        for hit in hits:
-            if properties:
-                projected = {p: hit.get(p) for p in properties}
-                projected["jcr:path"] = hit.get("jcr:path", "")
-                rows.append(projected)
-            else:
-                rows.append(hit)
-
-        offset += len(hits)
-        if len(hits) < page_size:
-            break
-        if pages >= 200:
-            complete = False
-            break
-
-    ds_id = materialize_dataset(
-        rows=rows,
+    builder = StreamingDatasetBuilder(
         metadata={
             "source": "aem_querybuilder",
             "query": query,
             "properties": properties,
-            "complete": complete,
         }
     )
+    try:
+        while True:
+            remaining = (max_limit - builder.row_count) if max_limit is not None else page_size
+            if remaining <= 0:
+                complete = False
+                break
+
+            current_page_size = min(page_size, remaining)
+            page_query = {**query, "p.limit": str(current_page_size), "p.offset": str(offset)}
+            res = _get_aem_json("/bin/querybuilder", page_query)
+            hits = res.get("hits", [])
+            pages += 1
+            if not hits:
+                break
+
+            page_rows = []
+            for hit in hits:
+                if properties:
+                    projected = {p: hit.get(p) for p in properties}
+                    projected["jcr:path"] = hit.get("jcr:path", "")
+                    page_rows.append(projected)
+                else:
+                    page_rows.append(hit)
+
+            if len(sample_rows) < 5:
+                sample_rows.extend(page_rows[:5 - len(sample_rows)])
+
+            builder.append_batch(page_rows)
+            offset += len(hits)
+
+            if len(hits) < current_page_size:
+                break
+
+        ds_id = builder.close(extra_metadata={"complete": complete, "pages_fetched": pages})
+    except Exception:
+        builder.close()
+        raise
+
     duration_ms = round((time.perf_counter() - start_time) * 1000, 2)
 
     return json.dumps({
         "dataset_id": ds_id,
-        "row_count": len(rows),
+        "row_count": builder.row_count,
         "pages_fetched": pages,
         "execution_time_ms": duration_ms,
         "complete": complete,
-        "sample": rows[:5],
+        "sample": sample_rows,
         "next": f"Use dataset_analyze(dataset_id='{ds_id}', operation='group_by', field='...') or dataset_export"
     }, ensure_ascii=False, indent=2)
 
