@@ -24,34 +24,48 @@ flowchart TD
     Client["AI Agent / LLM Client<br/>(Claude Desktop / Cursor / ChatGPT)"]
     MCP["FastMCP Server: AEM Content Intelligence<br/>(Read-Only Guardrails, Pagination & In-Memory Datasets)"]
 
+    subgraph DomainMgr ["Domain Profiles & Pluggable Data Sources"]
+        Hosp["Hospitality (Novaria Group)<br/>• SQLite Property Master<br/>• 1,000 Hotels / 11,000+ JCR Nodes<br/>• Star Rating & Amenity Audits"]
+        Auto["Automotive (Apex Motor Works)<br/>• CSV Model Registry<br/>• Electric & Hybrid Vehicles<br/>• Trim Spec & EPA Range Audits"]
+        Retail["Retail (Lumina Lifestyle)<br/>• JSON Product Catalog<br/>• Apparel & Accessories<br/>• Price & Inventory Audits"]
+    end
+
     subgraph Adapters ["Dual-Mode Storage & Service Adapters"]
         LiveAEM["Live AEM Client<br/>(AEMaaCS / On-Prem 6.5)<br/>• Sling JSON Selectors<br/>• /bin/querybuilder.json<br/>• Basic / Adobe IMS OAuth"]
-        MockJCR["Virtual JCR Simulator<br/>(Local In-Memory / File-backed)<br/>• Evaluates QueryBuilder Predicates<br/>• Resolves .json & .1.json<br/>• 110+ Synthetic Properties"]
-        EntityMaster["Master Entity Registry<br/>(SQLite / PIM / CRS)<br/>• Canonical Property Master<br/>• Brands, Amenities, Geocodes"]
+        MockJCR["Virtual JCR Simulator<br/>(Local In-Memory / File-backed)<br/>• Evaluates QueryBuilder Predicates<br/>• Resolves .json & .1.json"]
     end
 
     Client <-->|"Model Context Protocol"| MCP
+    MCP <-->|"Active Domain Profile"| DomainMgr
     MCP <-->|"Live Mode (AEM_MODE=live)"| LiveAEM
     MCP <-->|"Mock Mode (AEM_MODE=mock)"| MockJCR
-    MCP <-->|"Both Modes"| EntityMaster
 ```
 
 ---
 
 > [!NOTE]
-> **Fictional Demo Domain Notice:**
-> **"Novaria Hospitality Group"** (`novariahotels.com`) and all associated brand tiers (*Novaria Grand*, *Novaria House*, *Solstice Resorts*, *Novaria Select*), property names, personnel, and geolocations are 100% fictional demo entities created strictly for testing, agentic RAG evaluation, and open-source demonstration. Any resemblance to actual hospitality companies, operating properties, or registered trademarks is purely coincidental.
+> **Fictional Demo Domains Notice:**
+> - **Hospitality:** **"Novaria Hospitality Group"** (`novariahotels.com`, `NVR-*`, `/content/novaria`)
+> - **Automotive:** **"Apex Motor Works"** (`apexmotors.example.com`, `APX-*`, `/content/apex`)
+> - **Retail:** **"Lumina Lifestyle Retail"** (`luminafashion.example.com`, `LUM-*`, `/content/lumina`)
+>
+> All associated brands, products, vehicle specs, and personnel are 100% fictional demo entities created strictly for testing, agentic RAG evaluation, and open-source demonstration. Any resemblance to actual companies or registered trademarks is purely coincidental.
 
 ## Key Features
 
-1. **Zero-Cost Offline JCR Simulator:**
+1. **Pluggable Multi-Domain Architecture:**
+   - Bundles ready-to-use reference domains demonstrating varied data formats: **Hospitality** (SQLite), **Automotive** (CSV), and **Retail** (JSON).
+   - Easily add your own enterprise domain with a simple `domain.yaml` definition.
+2. **Zero-Cost Offline JCR Simulator:**
    - Clone and run immediately on your laptop without needing an expensive Adobe Cloud license.
-   - Includes 1,000 canonical synthetic properties across 50 international destinations, 11,000+ JCR nodes, and 350 deliberate audit anomalies under the fictional **Novaria Hospitality Group** demo domain.
-2. **Dual-System Reconciliation (AEM CMS + Master Entity Registry):**
-   - Combines authored marketing content (AEM JCR) with canonical business truths (Property Master database) to pinpoint discrepancies (e.g. stale star ratings, outdated amenities).
-3. **In-Memory SQLite Dataset Materialization:**
+   - Evaluates QueryBuilder predicates, resolves Sling JSON selectors, and simulates live AEM behavior offline.
+3. **Dual-System Reconciliation (AEM CMS + Master Entity Registry):**
+   - Combines authored marketing content (AEM JCR) with canonical business truths (SQLite, CSV, or JSON) to pinpoint discrepancies (e.g. stale specs, pricing desyncs, missing assets).
+4. **Declarative Governance Audit Engine:**
+   - Define business validation rules in YAML (field comparisons, existence checks, DAM asset verification) that the MCP server evaluates deterministically across site trees.
+5. **In-Memory SQLite Dataset Materialization:**
    - Instead of blowing up the LLM's context window with thousands of raw JSON nodes, the server streams query hits into local SQLite tables, performs server-side analytics, and generates downloadable **Excel (.xlsx)** and **CSV** audit workbooks.
-4. **Cloud & On-Premises Ready:**
+6. **Cloud & On-Premises Ready:**
    - Seamlessly switch between Local Simulator (`AEM_MODE=mock`), On-Prem 6.5 (`AEM_MODE=onprem`), and AEM as a Cloud Service (`AEM_MODE=cloud` with Adobe IMS OAuth 2.0).
 
 ---
@@ -114,7 +128,8 @@ Add to your Antigravity MCP configuration (`~/.gemini/antigravity/mcp_config.jso
         "aem-mcp"
       ],
       "env": {
-        "AEM_MODE": "mock"
+        "AEM_MODE": "mock",
+        "AEM_DOMAIN": "hospitality"
       }
     }
   }
@@ -136,7 +151,8 @@ Add the server to your `claude_desktop_config.json`:
         "aem-mcp"
       ],
       "env": {
-        "AEM_MODE": "mock"
+        "AEM_MODE": "mock",
+        "AEM_DOMAIN": "hospitality"
       }
     }
   }
@@ -154,7 +170,8 @@ Add to your project's `.cursor/mcp.json`:
       "args": ["-m", "aem_mcp.server"],
       "cwd": "/absolute/path/to/aem-mcp-starter-kit",
       "env": {
-        "AEM_MODE": "mock"
+        "AEM_MODE": "mock",
+        "AEM_DOMAIN": "hospitality"
       }
     }
   }
@@ -163,14 +180,20 @@ Add to your project's `.cursor/mcp.json`:
 
 ---
 
-## Tool Reference
+### Domain Management & Discovery Tools
+| Tool | Description |
+| :--- | :--- |
+| `domain_list()` | List all available domain profiles, their formats (SQLite, CSV, JSON), paths, and descriptions. |
+| `domain_switch(domain_id)` | Dynamically switch active business domain profile and reload underlying virtual JCR store & registries. |
+| `domain_get_active()` | Retrieve metadata and active audit rules of currently selected domain profile. |
+| `aem_audit_domain_rules(domain_id, root_path)` | Execute domain-specific declarative audit rules (field validations, DAM checks, price/spec parity). |
 
 ### Master Entity Registry Tools
 | Tool | Description |
 | :--- | :--- |
-| `registry_indexes()` | List available business entity tables (`properties`, `brands`, `destinations`). |
-| `registry_search(index, query, city, brand, limit)` | Search canonical property and brand records with structured filters. |
-| `registry_get(index, identifier)` | Lookup canonical record by primary ID (`hotel_id` or `brand_id`). |
+| `registry_indexes()` | List available business entity tables (`properties`, `brands`, `destinations`, etc.). |
+| `registry_search(index, query, city, brand, limit)` | Search canonical records with structured filters. |
+| `registry_get(index, identifier)` | Lookup canonical record by primary ID (`hotel_id`, `model_id`, `product_id`). |
 
 ### AEM Read-Only Tools
 | Tool | Description |
@@ -197,7 +220,7 @@ Add to your project's `.cursor/mcp.json`:
 | `dataset_info(dataset_id)` | View row counts and metadata of a materialized query dataset. |
 | `dataset_get_rows(dataset_id, offset, limit)` | Read a bounded slice of rows. |
 | `dataset_analyze(dataset_id, operation, field)` | Perform server-side `group_by`, `count`, `missing`, or `filter` aggregations. |
-| `dataset_match(left_id, right_id, left_field, right_field)` | Cross-system reconciliation between AEM content and Property Master. |
+| `dataset_match(left_id, right_id, left_field, right_field)` | Cross-system reconciliation between AEM content and Master Entity Registry. |
 | `dataset_export(dataset_id, format)` | Generate a downloadable CSV or standalone Excel (`.xlsx`) audit workbook. |
 | `dataset_discard(dataset_id)` | Clean up temporary dataset tables. |
 

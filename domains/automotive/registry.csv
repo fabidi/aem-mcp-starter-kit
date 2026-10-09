@@ -1,0 +1,13 @@
+vin_prefix,model_code,name,brand_tier,category,base_msrp,powertrain,horsepower,fuel_economy,status,featured_trim
+APX-SED-01,SOL-26,Apex Solace Sedan,Core,Sedan,38500,2.0L Turbo I4,250,32 mpg,ACTIVE,Aero
+APX-SED-02,SOL-PREM,Apex Solace Executive,Luxury,Sedan,46000,2.5L Turbo I4,300,28 mpg,ACTIVE,Executive
+APX-EV-03,PUL-EV,Apex Pulse EV,Electric,Electric,54000,Dual Motor AWD,420,112 mpge,ACTIVE,Long Range
+APX-EV-04,PUL-GT,Apex Pulse Performance EV,Electric,Electric,68500,Tri-Motor AWD,580,98 mpge,ACTIVE,GT Track
+APX-SUV-05,HOR-26,Apex Horizon Crossover,Core,SUV,41200,2.4L Turbo I4,265,27 mpg,ACTIVE,Adventure
+APX-SUV-06,HOR-MAX,Apex Horizon Grand 7-Seat,Core,SUV,48900,3.0L Turbo V6,355,24 mpg,ACTIVE,Touring
+APX-SUV-07,PIN-LUX,Apex Pinnacle Luxury SUV,Luxury,SUV,79500,3.5L Twin-Turbo V6,450,21 mpg,ACTIVE,Bespoke
+APX-SPT-08,VNG-GT,Apex Vanguard Coupe,Performance,Sports,62000,3.0L Twin-Turbo I6,405,23 mpg,ACTIVE,Sprint
+APX-SPT-09,VNG-R,Apex Vanguard Track Edition,Performance,Sports,78000,3.0L Twin-Turbo I6,480,20 mpg,ACTIVE,Carbon Track
+APX-TRM-10,ZEN-DISC,Apex Zenith Heritage Coupe,Heritage,Sports,85000,4.0L V8,500,17 mpg,DISCONTINUED,Collector
+APX-HYB-11,AUR-PHEV,Apex Aurora Hybrid Wagon,Core,Wagon,44500,2.0L Hybrid PHEV,290,75 mpge,ACTIVE,All-Road
+APX-TRK-12,TIT-PU,Apex Titan Heavy Duty,Commercial,Truck,52000,6.7L Turbo Diesel V8,475,19 mpg,ACTIVE,Workhorse

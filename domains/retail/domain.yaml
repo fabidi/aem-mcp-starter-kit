@@ -1,0 +1,43 @@
+domain:
+  name: "Lumina Lifestyle Retail"
+  description: "Global premium apparel, footwear, and outdoor equipment multi-brand catalog"
+  root_path: "/content/lumina"
+  canonical_site: "luminafashion.example.com"
+
+entity:
+  primary_entity: "Product"
+  type: "json"
+  file: "registry.json"
+  tables:
+    products: "Canonical PIM product catalog (sku, title, category, price, in_stock, material, status)"
+
+mapping:
+  aem_node_type: "cq:Page"
+  fields:
+    sku: "sku"
+    title: "jcr:title"
+    price: "price"
+    in_stock: "inStock"
+    category: "category"
+
+audit_rules:
+  - id: "price_desync"
+    name: "Authored Price vs. PIM Truth"
+    severity: "CRITICAL"
+    rule_type: "cross_reference"
+    condition: "aem.price != registry.price"
+    message: "Authored product price differs from canonical PIM catalog price"
+
+  - id: "out_of_stock_live"
+    name: "Out of Stock Listed as In Stock"
+    severity: "HIGH"
+    rule_type: "cross_reference"
+    condition: "registry.in_stock == 'false' and aem.inStock == 'true'"
+    message: "Product is out of stock in PIM inventory but marked in-stock on website"
+
+  - id: "missing_product_image"
+    name: "Missing DAM Product Image"
+    severity: "CRITICAL"
+    rule_type: "dam_asset"
+    path_property: "thumbnail/fileReference"
+    message: "Product image points to missing DAM asset path"

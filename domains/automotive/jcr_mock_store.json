@@ -1,0 +1,367 @@
+{
+  "/content": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/apex": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Motor Works Official Portal",
+      "sling:resourceType": "apex/components/structure/homepage"
+    }
+  },
+  "/content/apex/us": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/apex/us/en": {
+    "jcr:primaryType": "cq:Page"
+  },
+  "/content/apex/us/en/vehicles": {
+    "jcr:primaryType": "cq:Page"
+  },
+  "/content/dam": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/dam/apex": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/dam/apex/vehicles": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/dam/apex/vehicles/apex-solace-sedan-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Solace Sedan Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-solace-executive-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Solace Executive Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-pulse-ev-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Pulse EV Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-pulse-performance-ev-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Pulse Performance EV Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-horizon-crossover-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Horizon Crossover Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-horizon-grand-7-seat-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Horizon Grand 7-Seat Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-pinnacle-luxury-suv-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Pinnacle Luxury SUV Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-vanguard-coupe-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Vanguard Coupe Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-vanguard-track-edition-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Vanguard Track Edition Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-zenith-heritage-coupe-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Zenith Heritage Coupe Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-aurora-hybrid-wagon-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Aurora Hybrid Wagon Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/dam/apex/vehicles/apex-titan-heavy-duty-hero.png": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Apex Titan Heavy Duty Exterior Hero",
+        "dc:format": "image/png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-solace-sedan": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Solace Sedan",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-SED-01",
+      "modelCode": "SOL-26",
+      "category": "Sedan",
+      "msrp": "38500",
+      "powertrain": "2.0L Turbo I4",
+      "status": "ACTIVE",
+      "featuredTrim": "Aero",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-solace-sedan-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-solace-executive": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Solace Executive",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-SED-02",
+      "modelCode": "SOL-PREM",
+      "category": "Sedan",
+      "msrp": "46000",
+      "powertrain": "2.5L Turbo I4",
+      "status": "ACTIVE",
+      "featuredTrim": "Executive",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-solace-executive-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-pulse-ev": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Pulse EV",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-EV-03",
+      "modelCode": "PUL-EV",
+      "category": "Electric",
+      "msrp": "54000",
+      "powertrain": "Dual Motor AWD",
+      "status": "ACTIVE",
+      "featuredTrim": "Long Range",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-pulse-ev-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-pulse-performance-ev": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Pulse Performance EV",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-EV-04",
+      "modelCode": "PUL-GT",
+      "category": "Electric",
+      "msrp": "68500",
+      "powertrain": "Tri-Motor AWD",
+      "status": "ACTIVE",
+      "featuredTrim": "GT Track",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-pulse-performance-ev-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-horizon-crossover": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Horizon Crossover",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-SUV-05",
+      "modelCode": "HOR-26",
+      "category": "SUV",
+      "msrp": "41200",
+      "powertrain": "2.4L Turbo I4",
+      "status": "ACTIVE",
+      "featuredTrim": "Adventure",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-horizon-crossover-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-horizon-grand-7-seat": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Horizon Grand 7-Seat",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-SUV-06",
+      "modelCode": "HOR-MAX",
+      "category": "SUV",
+      "msrp": "45500",
+      "powertrain": "3.0L Turbo V6",
+      "status": "ACTIVE",
+      "featuredTrim": "Touring",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-horizon-grand-7-seat-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-pinnacle-luxury-suv": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Pinnacle Luxury SUV",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-SUV-07",
+      "modelCode": "PIN-LUX",
+      "category": "SUV",
+      "msrp": "79500",
+      "powertrain": "3.5L Twin-Turbo V6",
+      "status": "ACTIVE",
+      "featuredTrim": "Bespoke",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-pinnacle-luxury-suv-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-vanguard-coupe": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Vanguard Coupe",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-SPT-08",
+      "modelCode": "VNG-GT",
+      "category": "Sports",
+      "msrp": "62000",
+      "powertrain": "3.0L Twin-Turbo I6",
+      "status": "ACTIVE",
+      "featuredTrim": "Sprint",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-vanguard-coupe-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-vanguard-track-edition": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Vanguard Track Edition",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-SPT-09",
+      "modelCode": "VNG-R",
+      "category": "Sports",
+      "msrp": "78000",
+      "powertrain": "3.0L Twin-Turbo I6",
+      "status": "ACTIVE",
+      "featuredTrim": "Carbon Track",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/non-existent-track-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-zenith-heritage-coupe": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Zenith Heritage Coupe",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-TRM-10",
+      "modelCode": "ZEN-DISC",
+      "category": "Sports",
+      "msrp": "85000",
+      "powertrain": "4.0L V8",
+      "status": "ACTIVE",
+      "featuredTrim": "Collector",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-zenith-heritage-coupe-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-aurora-hybrid-wagon": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Aurora Hybrid Wagon",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-HYB-11",
+      "modelCode": "AUR-PHEV",
+      "category": "Wagon",
+      "msrp": "44500",
+      "powertrain": "2.0L Hybrid PHEV",
+      "status": "ACTIVE",
+      "featuredTrim": "All-Road",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-aurora-hybrid-wagon-hero.png"
+      }
+    }
+  },
+  "/content/apex/us/en/vehicles/apex-titan-heavy-duty": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Apex Titan Heavy Duty",
+      "sling:resourceType": "apex/components/structure/vehicle-page",
+      "vinPrefix": "APX-TRK-12",
+      "modelCode": "TIT-PU",
+      "category": "Truck",
+      "msrp": "52000",
+      "powertrain": "6.7L Turbo Diesel V8",
+      "status": "ACTIVE",
+      "featuredTrim": "Workhorse",
+      "heroAsset": {
+        "fileReference": "/content/dam/apex/vehicles/apex-titan-heavy-duty-hero.png"
+      }
+    }
+  }
+}

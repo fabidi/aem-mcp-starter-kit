@@ -1,0 +1,112 @@
+{
+  "products": [
+    {
+      "sku": "LUM-JKT-01",
+      "title": "Lumina Alpine Gore-Tex Shell",
+      "category": "Outerwear",
+      "price": "450",
+      "in_stock": "true",
+      "material": "Recycled Polyamide",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-JKT-02",
+      "title": "Lumina Merino Wool Overcoat",
+      "category": "Outerwear",
+      "price": "320",
+      "in_stock": "true",
+      "material": "100% Merino Wool",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-FLC-03",
+      "title": "Lumina Glacier Grid Fleece",
+      "category": "Midlayer",
+      "price": "140",
+      "in_stock": "true",
+      "material": "Polartec Thermal",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-PNT-04",
+      "title": "Lumina Traverse Expedition Pant",
+      "category": "Apparel",
+      "price": "190",
+      "in_stock": "true",
+      "material": "Cordura Ripstop",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-BOOT-05",
+      "title": "Lumina Summit Waterproof Hiker",
+      "category": "Footwear",
+      "price": "260",
+      "in_stock": "false",
+      "material": "Nubuck Leather",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-BOOT-06",
+      "title": "Lumina Urban Chelsea Boot",
+      "category": "Footwear",
+      "price": "210",
+      "in_stock": "true",
+      "material": "Full-Grain Leather",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-BAG-07",
+      "title": "Lumina Nomad 35L Roll-Top Pack",
+      "category": "Equipment",
+      "price": "175",
+      "in_stock": "true",
+      "material": "Ballistic Nylon",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-BAG-08",
+      "title": "Lumina Minimalist Weekender Duffel",
+      "category": "Equipment",
+      "price": "195",
+      "in_stock": "true",
+      "material": "Weatherproof Canvas",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-ACC-09",
+      "title": "Lumina Cashmere Beanie",
+      "category": "Accessories",
+      "price": "65",
+      "in_stock": "true",
+      "material": "Mongolian Cashmere",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-ACC-10",
+      "title": "Lumina Polarized Trail Sunglasses",
+      "category": "Accessories",
+      "price": "120",
+      "in_stock": "true",
+      "material": "Bio-Acetate",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-SLP-11",
+      "title": "Lumina Zero-Down 800 Sleeping Bag",
+      "category": "Equipment",
+      "price": "380",
+      "in_stock": "true",
+      "material": "800FP Hydrophobic Down",
+      "status": "ACTIVE"
+    },
+    {
+      "sku": "LUM-ARC-12",
+      "title": "Lumina Heritage Trench (Archived)",
+      "category": "Outerwear",
+      "price": "550",
+      "in_stock": "false",
+      "material": "Organic Cotton Gabardine",
+      "status": "ARCHIVED"
+    }
+  ]
+}

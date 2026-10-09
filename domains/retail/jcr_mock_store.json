@@ -1,0 +1,355 @@
+{
+  "/content": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/lumina": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Lifestyle Retail Global Catalog",
+      "sling:resourceType": "lumina/components/structure/storefront"
+    }
+  },
+  "/content/lumina/us": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/lumina/us/en": {
+    "jcr:primaryType": "cq:Page"
+  },
+  "/content/lumina/us/en/products": {
+    "jcr:primaryType": "cq:Page"
+  },
+  "/content/dam": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/dam/lumina": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/dam/lumina/products": {
+    "jcr:primaryType": "sling:Folder"
+  },
+  "/content/dam/lumina/products/lumina-alpine-gore-tex-shell-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Alpine Gore-Tex Shell Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-merino-wool-overcoat-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Merino Wool Overcoat Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-glacier-grid-fleece-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Glacier Grid Fleece Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-traverse-expedition-pant-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Traverse Expedition Pant Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-summit-waterproof-hiker-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Summit Waterproof Hiker Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-urban-chelsea-boot-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Urban Chelsea Boot Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-nomad-35l-roll-top-pack-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Nomad 35L Roll-Top Pack Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-minimalist-weekender-duffel-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Minimalist Weekender Duffel Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-cashmere-beanie-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Cashmere Beanie Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-polarized-trail-sunglasses-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Polarized Trail Sunglasses Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-zero-down-800-sleeping-bag-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Zero-Down 800 Sleeping Bag Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/dam/lumina/products/lumina-heritage-trench-archived-thumb.jpg": {
+    "jcr:primaryType": "dam:Asset",
+    "jcr:content": {
+      "jcr:primaryType": "dam:AssetContent",
+      "metadata": {
+        "dc:title": "Lumina Heritage Trench (Archived) Thumbnail",
+        "dc:format": "image/jpeg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-alpine-gore-tex-shell": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Alpine Gore-Tex Shell",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-JKT-01",
+      "category": "Outerwear",
+      "price": "450",
+      "inStock": "true",
+      "material": "Recycled Polyamide",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-alpine-gore-tex-shell-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-merino-wool-overcoat": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Merino Wool Overcoat",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-JKT-02",
+      "category": "Outerwear",
+      "price": "280",
+      "inStock": "true",
+      "material": "100% Merino Wool",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-merino-wool-overcoat-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-glacier-grid-fleece": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Glacier Grid Fleece",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-FLC-03",
+      "category": "Midlayer",
+      "price": "140",
+      "inStock": "true",
+      "material": "Polartec Thermal",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-glacier-grid-fleece-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-traverse-expedition-pant": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Traverse Expedition Pant",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-PNT-04",
+      "category": "Apparel",
+      "price": "190",
+      "inStock": "true",
+      "material": "Cordura Ripstop",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-traverse-expedition-pant-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-summit-waterproof-hiker": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Summit Waterproof Hiker",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-BOOT-05",
+      "category": "Footwear",
+      "price": "260",
+      "inStock": "true",
+      "material": "Nubuck Leather",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-summit-waterproof-hiker-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-urban-chelsea-boot": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Urban Chelsea Boot",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-BOOT-06",
+      "category": "Footwear",
+      "price": "210",
+      "inStock": "true",
+      "material": "Full-Grain Leather",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-urban-chelsea-boot-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-nomad-35l-roll-top-pack": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Nomad 35L Roll-Top Pack",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-BAG-07",
+      "category": "Equipment",
+      "price": "175",
+      "inStock": "true",
+      "material": "Ballistic Nylon",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-nomad-35l-roll-top-pack-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-minimalist-weekender-duffel": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Minimalist Weekender Duffel",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-BAG-08",
+      "category": "Equipment",
+      "price": "195",
+      "inStock": "true",
+      "material": "Weatherproof Canvas",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/broken-weekender-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-cashmere-beanie": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Cashmere Beanie",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-ACC-09",
+      "category": "Accessories",
+      "price": "65",
+      "inStock": "true",
+      "material": "Mongolian Cashmere",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-cashmere-beanie-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-polarized-trail-sunglasses": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Polarized Trail Sunglasses",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-ACC-10",
+      "category": "Accessories",
+      "price": "120",
+      "inStock": "true",
+      "material": "Bio-Acetate",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-polarized-trail-sunglasses-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-zero-down-800-sleeping-bag": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Zero-Down 800 Sleeping Bag",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-SLP-11",
+      "category": "Equipment",
+      "price": "380",
+      "inStock": "true",
+      "material": "800FP Hydrophobic Down",
+      "status": "ACTIVE",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-zero-down-800-sleeping-bag-thumb.jpg"
+      }
+    }
+  },
+  "/content/lumina/us/en/products/lumina-heritage-trench-archived": {
+    "jcr:primaryType": "cq:Page",
+    "jcr:content": {
+      "jcr:primaryType": "cq:PageContent",
+      "jcr:title": "Lumina Heritage Trench (Archived)",
+      "sling:resourceType": "lumina/components/structure/product-page",
+      "sku": "LUM-ARC-12",
+      "category": "Outerwear",
+      "price": "550",
+      "inStock": "false",
+      "material": "Organic Cotton Gabardine",
+      "status": "ARCHIVED",
+      "thumbnail": {
+        "fileReference": "/content/dam/lumina/products/lumina-heritage-trench-archived-thumb.jpg"
+      }
+    }
+  }
+}

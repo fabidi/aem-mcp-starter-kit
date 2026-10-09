@@ -1,0 +1,45 @@
+domain:
+  name: "Novaria Hospitality Group"
+  description: "Global luxury and boutique hospitality portfolio with 1,000 properties across 50 international destinations"
+  root_path: "/content/novaria"
+  canonical_site: "novariahotels.com"
+
+entity:
+  primary_entity: "Hotel"
+  type: "sqlite"
+  file: "property_master.sqlite"
+  tables:
+    properties: "Canonical hotel and resort entity records (hotel_id, brand_id, amenities, rooms, GPS, star rating)"
+    brands: "Brand portfolio definitions, tiers, and operational brand standards"
+    destinations: "Global destination metadata, coordinates, country and region codes"
+
+mapping:
+  aem_node_type: "cq:Page"
+  fields:
+    hotel_id: "hotelId"
+    name: "jcr:title"
+    star_rating: "authoredStarRating"
+    operating_status: "operatingStatus"
+    amenities: "amenities"
+
+audit_rules:
+  - id: "stale_star_ratings"
+    name: "Stale Star Rating Desync"
+    severity: "HIGH"
+    rule_type: "cross_reference"
+    condition: "aem.authoredStarRating != registry.star_rating"
+    message: "Authored star rating does not match canonical PMS star rating"
+
+  - id: "operating_status_desync"
+    name: "Operating Status Mismatch"
+    severity: "CRITICAL"
+    rule_type: "cross_reference"
+    condition: "registry.operating_status == 'Renovating' and aem.operatingStatus == 'Active'"
+    message: "Property is undergoing renovation in PMS but published as Active on website"
+
+  - id: "broken_hero_assets"
+    name: "Broken DAM Hero Asset"
+    severity: "CRITICAL"
+    rule_type: "dam_asset"
+    path_property: "heroImage/fileReference"
+    message: "Hero image references missing DAM asset path"

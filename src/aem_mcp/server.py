@@ -53,10 +53,20 @@ mcp = FastMCP(
     instructions=CANONICAL_PROMPT
 )
 
+from aem_mcp.domains.manager import DOMAIN_MANAGER
+
 # Simulator instance when in mock mode
 _SIMULATOR: JcrEngine | None = None
-if CONFIG.is_mock():
-    _SIMULATOR = JcrEngine(CONFIG.mock_jcr_path)
+
+def _reload_simulator_for_active_domain():
+    global _SIMULATOR
+    if CONFIG.is_mock():
+        profile = DOMAIN_MANAGER.active_profile
+        mock_path = profile.jcr_mock_path or CONFIG.mock_jcr_path
+        _SIMULATOR = JcrEngine(mock_path)
+
+_reload_simulator_for_active_domain()
+DOMAIN_MANAGER.register_switch_listener(lambda _: _reload_simulator_for_active_domain())
 
 _IMS_AUTH: AdobeImsAuthProvider | None = None
 if CONFIG.mode == "cloud":
@@ -660,6 +670,102 @@ def aem_lint_query_indexing(query: dict[str, Any]) -> str:
         "recommended_indexes": remediations
     }
     return json.dumps(report, ensure_ascii=False, indent=2)
+
+
+# --- Multi-Domain Management & Governance Tools ---
+
+@mcp.tool()
+def domain_list() -> str:
+    """
+    List available enterprise domain profiles (Hospitality, Automotive, Retail)
+    and the currently active domain profile.
+    """
+    profiles = []
+    for d_id, p in DOMAIN_MANAGER.profiles.items():
+        profiles.append({
+            "id": d_id,
+            "name": p.name,
+            "description": p.description,
+            "primary_entity": p.primary_entity,
+            "data_source_type": p.data_source_type,
+            "data_source_file": p.data_source_file,
+            "root_path": p.root_path,
+            "is_active": (d_id == DOMAIN_MANAGER.active_domain_id),
+            "audit_rules_count": len(p.audit_rules)
+        })
+    return json.dumps({
+        "active_domain": DOMAIN_MANAGER.active_domain_id,
+        "total_domains": len(profiles),
+        "domains": profiles
+    }, indent=2)
+
+
+@mcp.tool()
+def domain_switch(name: str) -> str:
+    """
+    Switch the active enterprise domain profile (e.g. 'hospitality', 'automotive', 'retail').
+    Dynamically switches the Master Registry (SQLite, CSV, JSON) and JCR mock content store.
+    """
+    try:
+        profile = DOMAIN_MANAGER.switch_domain(name)
+        _reload_simulator_for_active_domain()
+        return json.dumps({
+            "success": True,
+            "switched_to": profile.id,
+            "name": profile.name,
+            "primary_entity": profile.primary_entity,
+            "data_source_type": profile.data_source_type,
+            "data_source_file": profile.data_source_file,
+            "root_path": profile.root_path,
+            "audit_rules_count": len(profile.audit_rules)
+        }, indent=2)
+    except Exception as e:
+        return json.dumps({"success": False, "error": str(e)}, indent=2)
+
+
+@mcp.tool()
+def domain_get_active() -> str:
+    """
+    Get detailed information about the active enterprise domain profile,
+    including table schemas, JCR field mappings, and registered audit rules.
+    """
+    p = DOMAIN_MANAGER.active_profile
+    return json.dumps({
+        "id": p.id,
+        "name": p.name,
+        "description": p.description,
+        "primary_entity": p.primary_entity,
+        "data_source_type": p.data_source_type,
+        "data_source_file": p.data_source_file,
+        "root_path": p.root_path,
+        "tables": p.table_descriptions,
+        "field_mappings": p.field_mappings,
+        "audit_rules": [
+            {
+                "id": r.id,
+                "name": r.name,
+                "severity": r.severity,
+                "rule_type": r.rule_type,
+                "condition": r.condition,
+                "message": r.message
+            }
+            for r in p.audit_rules
+        ]
+    }, indent=2)
+
+
+@mcp.tool()
+def aem_audit_domain_rules(domain: str = "", limit: int = 100) -> str:
+    """
+    Executes declarative domain governance rules for the active (or specified) domain,
+    reconciling AEM authored content against the canonical master data source (SQLite, CSV, JSON).
+    """
+    if domain and domain.lower().strip() != DOMAIN_MANAGER.active_domain_id:
+        domain_switch(domain)
+
+    assert _SIMULATOR is not None
+    findings = DOMAIN_MANAGER.evaluate_audit_rules(_SIMULATOR, limit=limit)
+    return json.dumps(findings, indent=2)
 
 
 def main():

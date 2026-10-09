@@ -1,0 +1,43 @@
+domain:
+  name: "Apex Motor Works"
+  description: "Global automotive manufacturer product catalog, EV powertrains, and regional dealer sites"
+  root_path: "/content/apex"
+  canonical_site: "apexmotors.example.com"
+
+entity:
+  primary_entity: "Vehicle"
+  type: "csv"
+  file: "registry.csv"
+  tables:
+    vehicles: "Canonical automotive vehicle records (vin_prefix, model_code, name, category, base_msrp, powertrain, status)"
+
+mapping:
+  aem_node_type: "cq:Page"
+  fields:
+    vin_prefix: "vinPrefix"
+    name: "jcr:title"
+    base_msrp: "msrp"
+    powertrain: "powertrain"
+    status: "status"
+
+audit_rules:
+  - id: "msrp_desync"
+    name: "Authored MSRP vs. ERP Base Price"
+    severity: "CRITICAL"
+    rule_type: "cross_reference"
+    condition: "aem.msrp != registry.base_msrp"
+    message: "Authored vehicle MSRP does not match ERP manufacturing master pricing"
+
+  - id: "discontinued_trim_live"
+    name: "Discontinued Trim Active on Site"
+    severity: "HIGH"
+    rule_type: "cross_reference"
+    condition: "registry.status == 'DISCONTINUED' and aem.status == 'ACTIVE'"
+    message: "Vehicle trim is discontinued in manufacturing ERP but published active on website"
+
+  - id: "broken_exterior_render"
+    name: "Missing DAM Exterior Render"
+    severity: "CRITICAL"
+    rule_type: "dam_asset"
+    path_property: "heroAsset/fileReference"
+    message: "Vehicle hero render points to non-existent DAM asset"
