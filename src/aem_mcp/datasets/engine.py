@@ -114,6 +114,79 @@ def get_dataset_rows(dataset_id: str, offset: int = 0, limit: int = 100) -> list
 
 
 
+def _build_json_path(field: str) -> str:
+    """Build safe SQLite JSON1 path escaping double quotes."""
+    escaped = field.replace('"', '""')
+    return f'$."{escaped}"'
+
+
+def _build_sql_filter_clause(fld_path: str, operator: str, value: Any) -> tuple[str, list[Any]]:
+    """Build parameterized SQL WHERE condition for SQLite JSON1 query."""
+    op = operator.lower().strip()
+    val_str = str(value)
+
+    if op in ("equals", "==", "="):
+        return f"LOWER(CAST(json_extract(data, '{fld_path}') AS TEXT)) = LOWER(?)", [val_str]
+    elif op in ("unequals", "!=", "<>"):
+        return f"LOWER(CAST(json_extract(data, '{fld_path}') AS TEXT)) != LOWER(?)", [val_str]
+    elif op == "contains":
+        return f"LOWER(CAST(json_extract(data, '{fld_path}') AS TEXT)) LIKE ?", [f"%{val_str.lower()}%"]
+    elif op == "starts_with":
+        return f"LOWER(CAST(json_extract(data, '{fld_path}') AS TEXT)) LIKE ?", [f"{val_str.lower()}%"]
+    elif op == "ends_with":
+        return f"LOWER(CAST(json_extract(data, '{fld_path}') AS TEXT)) LIKE ?", [f"%{val_str.lower()}"]
+    elif op == "like":
+        return f"CAST(json_extract(data, '{fld_path}') AS TEXT) LIKE ?", [val_str]
+    elif op in ("exists", "present"):
+        return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != ''", []
+    elif op in ("not", "missing", "empty"):
+        return f"json_extract(data, '{fld_path}') IS NULL OR json_extract(data, '{fld_path}') = ''", []
+    elif op in ("gt", ">"):
+        try:
+            return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND CAST(json_extract(data, '{fld_path}') AS REAL) > ?", [float(val_str)]
+        except ValueError:
+            return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND json_extract(data, '{fld_path}') > ?", [val_str]
+    elif op in ("gte", ">="):
+        try:
+            return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND CAST(json_extract(data, '{fld_path}') AS REAL) >= ?", [float(val_str)]
+        except ValueError:
+            return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND json_extract(data, '{fld_path}') >= ?", [val_str]
+    elif op in ("lt", "<"):
+        try:
+            return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND CAST(json_extract(data, '{fld_path}') AS REAL) < ?", [float(val_str)]
+        except ValueError:
+            return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND json_extract(data, '{fld_path}') < ?", [val_str]
+    elif op in ("lte", "<="):
+        try:
+            return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND CAST(json_extract(data, '{fld_path}') AS REAL) <= ?", [float(val_str)]
+        except ValueError:
+            return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND json_extract(data, '{fld_path}') <= ?", [val_str]
+    elif op == "between":
+        if "," in val_str:
+            low, high = val_str.split(",", 1)
+            low, high = low.strip(), high.strip()
+            try:
+                return (
+                    f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND "
+                    f"CAST(json_extract(data, '{fld_path}') AS REAL) BETWEEN ? AND ?",
+                    [float(low), float(high)]
+                )
+            except ValueError:
+                return (
+                    f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND "
+                    f"json_extract(data, '{fld_path}') BETWEEN ? AND ?",
+                    [low, high]
+                )
+        else:
+            return f"json_extract(data, '{fld_path}') = ?", [val_str]
+    elif op in ("after", "date_after"):
+        return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND json_extract(data, '{fld_path}') > ?", [val_str]
+    elif op in ("before", "date_before"):
+        return f"json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' AND json_extract(data, '{fld_path}') < ?", [val_str]
+    else:
+        return f"LOWER(CAST(json_extract(data, '{fld_path}') AS TEXT)) = LOWER(?)", [val_str]
+
+
 def analyze_dataset(
     dataset_id: str,
     operation: str,
@@ -122,92 +195,119 @@ def analyze_dataset(
     other_field: str = "",
     operator: str = "equals"
 ) -> dict[str, Any]:
-    """Execute server-side aggregation and analytical operations."""
-    rows = get_dataset_rows(dataset_id, offset=0, limit=100000)
-    total_rows = len(rows)
+    """
+    Execute server-side aggregation and analytical operations.
+    Leverages SQLite's native C-engine JSON1 functions (json_extract) for
+    sub-millisecond aggregations without row count ceilings or in-memory Python loops.
+    """
+    conn = _dataset_connection(dataset_id)
+    try:
+        total_rows_res = conn.execute("SELECT COUNT(*) FROM rows").fetchone()
+        total_rows = total_rows_res[0] if total_rows_res else 0
+        if total_rows == 0:
+            return {"operation": operation, "dataset_id": dataset_id, "total_rows": 0}
 
-    if operation == "count":
-        if not field:
-            return {"operation": "count", "dataset_id": dataset_id, "total_rows": total_rows}
-        matching = 0
-        for r in rows:
-            v = str(r.get(field, "")).lower()
-            val = str(value).lower()
-            if operator == "equals" and v == val:
-                matching += 1
-            elif operator == "unequals" and v != val:
-                matching += 1
-            elif operator == "contains" and val in v:
-                matching += 1
-            elif operator == "exists" and field in r and r[field] is not None:
-                matching += 1
-            elif operator == "not" and (field not in r or r[field] is None or r[field] == ""):
-                matching += 1
-        return {
-            "operation": "count",
-            "field": field,
-            "operator": operator,
-            "value": value,
-            "matching_rows": matching,
-            "total_rows": total_rows,
-            "percentage": round((matching / total_rows * 100), 2) if total_rows else 0
-        }
+        op = operation.lower().strip()
+        fld_path = _build_json_path(field) if field else ""
 
-    elif operation == "missing":
-        missing_count = sum(
-            1 for r in rows if field not in r or r[field] is None or r[field] == ""
-        )
-        return {
-            "operation": "missing",
-            "field": field,
-            "missing_count": missing_count,
-            "present_count": total_rows - missing_count,
-            "total_rows": total_rows,
-            "completeness_pct": round(((total_rows - missing_count) / total_rows * 100), 2) if total_rows else 0
-        }
+        if op == "count":
+            if not field:
+                return {"operation": "count", "dataset_id": dataset_id, "total_rows": total_rows}
+            clause, params = _build_sql_filter_clause(fld_path, operator, value)
+            matching = conn.execute(f"SELECT COUNT(*) FROM rows WHERE {clause}", params).fetchone()[0]
+            return {
+                "operation": "count",
+                "field": field,
+                "operator": operator,
+                "value": value,
+                "matching_rows": matching,
+                "total_rows": total_rows,
+                "percentage": round((matching / total_rows * 100), 2) if total_rows else 0
+            }
 
-    elif operation == "group_by":
-        counts: dict[str, int] = {}
-        for r in rows:
-            val_str = str(r.get(field, "<MISSING>"))
-            counts[val_str] = counts.get(val_str, 0) + 1
-        sorted_counts = dict(sorted(counts.items(), key=lambda item: -item[1]))
-        return {
-            "operation": "group_by",
-            "field": field,
-            "total_rows": total_rows,
-            "distinct_values": len(sorted_counts),
-            "groups": sorted_counts
-        }
+        elif op == "missing":
+            sql = f"""
+                SELECT 
+                    SUM(CASE WHEN json_extract(data, '{fld_path}') IS NULL OR json_extract(data, '{fld_path}') = '' THEN 1 ELSE 0 END)
+                FROM rows
+            """
+            missing_count = conn.execute(sql).fetchone()[0] or 0
+            present_count = total_rows - missing_count
+            return {
+                "operation": "missing",
+                "field": field,
+                "missing_count": missing_count,
+                "present_count": present_count,
+                "total_rows": total_rows,
+                "completeness_pct": round((present_count / total_rows * 100), 2) if total_rows else 0
+            }
 
-    elif operation == "filter":
-        matches = []
-        for r in rows:
-            v = str(r.get(field, "")).lower()
-            val = str(value).lower()
-            match = False
-            if operator == "equals" and v == val:
-                match = True
-            elif operator == "unequals" and v != val:
-                match = True
-            elif operator == "contains" and val in v:
-                match = True
-            elif operator == "exists" and field in r and r[field] is not None:
-                match = True
-            elif operator == "not" and (field not in r or r[field] is None or r[field] == ""):
-                match = True
-            if match:
-                matches.append(r)
-        return {
-            "operation": "filter",
-            "field": field,
-            "operator": operator,
-            "value": value,
-            "matched_count": len(matches),
-            "sample": matches[:20]
-        }
+        elif op == "group_by":
+            sql = f"""
+                SELECT 
+                    COALESCE(json_extract(data, '{fld_path}'), '<MISSING>') as val,
+                    COUNT(*) as cnt
+                FROM rows
+                GROUP BY val
+                ORDER BY cnt DESC
+                LIMIT 100
+            """
+            records = conn.execute(sql).fetchall()
+            sorted_counts = {str(r[0]): r[1] for r in records}
+            return {
+                "operation": "group_by",
+                "field": field,
+                "total_rows": total_rows,
+                "distinct_values": len(sorted_counts),
+                "groups": sorted_counts
+            }
 
-    raise ValueError(f"Unsupported analysis operation: '{operation}'. Use 'count', 'missing', 'group_by', or 'filter'.")
+        elif op in ("stats", "numeric_summary", "avg", "min", "max", "sum"):
+            sql = f"""
+                SELECT 
+                    COUNT(CASE WHEN json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != '' THEN 1 END) as cnt,
+                    MIN(CAST(json_extract(data, '{fld_path}') AS REAL)) as min_val,
+                    MAX(CAST(json_extract(data, '{fld_path}') AS REAL)) as max_val,
+                    ROUND(AVG(CAST(json_extract(data, '{fld_path}') AS REAL)), 2) as avg_val,
+                    SUM(CAST(json_extract(data, '{fld_path}') AS REAL)) as sum_val
+                FROM rows
+                WHERE json_extract(data, '{fld_path}') IS NOT NULL AND json_extract(data, '{fld_path}') != ''
+            """
+            row = conn.execute(sql).fetchone()
+            cnt, min_v, max_v, avg_v, sum_v = row if row else (0, None, None, None, None)
+            res = {
+                "operation": op,
+                "field": field,
+                "total_rows": total_rows,
+                "numeric_rows": cnt,
+                "min": min_v,
+                "max": max_v,
+                "avg": avg_v,
+                "sum": sum_v
+            }
+            if op in ("avg", "min", "max", "sum"):
+                res["result"] = res[op]
+            return res
+
+        elif op == "filter":
+            clause, params = _build_sql_filter_clause(fld_path, operator, value)
+            matched_count = conn.execute(f"SELECT COUNT(*) FROM rows WHERE {clause}", params).fetchone()[0]
+            sample_records = conn.execute(f"SELECT data FROM rows WHERE {clause} LIMIT 20", params).fetchall()
+            sample = [json.loads(r[0]) for r in sample_records]
+            return {
+                "operation": "filter",
+                "field": field,
+                "operator": operator,
+                "value": value,
+                "matched_count": matched_count,
+                "sample": sample
+            }
+
+        else:
+            raise ValueError(f"Unsupported analysis operation: '{operation}'. Use 'count', 'missing', 'group_by', 'stats', 'avg', 'min', 'max', 'sum', or 'filter'.")
+
+    finally:
+        conn.close()
 
 
 def match_datasets(

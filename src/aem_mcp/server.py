@@ -356,7 +356,17 @@ def dataset_analyze(
     other_field: str = "",
     operator: str = "equals"
 ) -> str:
-    """Run server-side aggregations (count, distinct, missing, group_by, filter) over a dataset."""
+    """
+    Run server-side aggregations and analytics over a materialized dataset at native SQLite C-speed.
+    
+    Operations:
+      - 'count': Match count & percentage. Supports operators ('equals', 'unequals', 'contains', 'starts_with', 'ends_with', 'like', 'exists', 'not', 'gt', 'gte', 'lt', 'lte', 'between', 'before', 'after').
+      - 'missing': Completeness audit (missing_count, present_count, completeness_pct).
+      - 'group_by': Categorical breakdown and distinct frequency distribution.
+      - 'stats': Numeric statistical summary (min, max, avg, sum, numeric_rows).
+      - 'avg', 'min', 'max', 'sum': Direct numeric scalar aggregations.
+      - 'filter': Bounded sample extraction matching operator conditions.
+    """
     res = analyze_dataset(
         dataset_id=dataset_id,
         operation=operation,
