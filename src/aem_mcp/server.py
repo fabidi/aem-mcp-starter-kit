@@ -27,7 +27,7 @@ except ImportError:
 import time
 from aem_mcp.auth.ims import AdobeImsAuthProvider
 from aem_mcp.config import CONFIG, ROOT_DIR
-from aem_mcp.prompts import CANONICAL_PROMPT, get_runtime_info
+from aem_mcp.prompts import CANONICAL_PROMPT, get_runtime_info, get_canonical_prompt
 from aem_mcp.registry import get_registry_indexes, search_registry, get_registry_entity
 from aem_mcp.simulator.jcr_engine import JcrEngine
 from aem_mcp.audit import (
@@ -110,14 +110,30 @@ def _get_aem_json(path: str, params: dict[str, Any] | None = None) -> Any:
 
 @mcp.resource("aem://prompt")
 def aem_prompt_resource() -> str:
-    """Canonical operating instructions for AEM Content Intelligence."""
-    return CANONICAL_PROMPT
+    """Canonical operating instructions for AEM Content Intelligence reflecting active domain."""
+    p = DOMAIN_MANAGER.active_profile
+    return get_canonical_prompt(
+        domain_name=p.name,
+        root_path=p.root_path,
+        primary_entity=p.primary_entity
+    )
 
 
 @mcp.resource("aem://runtime")
 def aem_runtime_resource() -> str:
     """Safe active-environment runtime configuration."""
-    return json.dumps(get_runtime_info(), indent=2)
+    p = DOMAIN_MANAGER.active_profile
+    info = get_runtime_info()
+    info.update({
+        "domain_id": p.id,
+        "domain_name": p.name,
+        "root_path": p.root_path,
+        "primary_entity": p.primary_entity,
+        "data_source_type": p.data_source_type,
+        "data_source_file": p.data_source_file,
+        "audit_rules_count": str(len(p.audit_rules)),
+    })
+    return json.dumps(info, indent=2)
 
 
 # --- Master Entity Registry Tools ---

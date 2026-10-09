@@ -1,0 +1,50 @@
+# ==============================================================================
+# Domain Profile Template for AEM Content Intelligence MCP
+# Copy this directory to domains/<your_domain_id>/ and rename/customize this file.
+# ==============================================================================
+
+domain:
+  name: "Your Enterprise Domain Name"
+  description: "High-level description of your business domain and CMS content scope"
+  root_path: "/content/yourbrand"       # The AEM JCR content search root for this domain
+  canonical_site: "www.yourbrand.com"
+
+entity:
+  primary_entity: "Product"             # Human-readable entity name (e.g. Product, Vehicle, Hotel, Policy)
+  type: "csv"                           # Storage type: 'sqlite', 'csv', or 'json'
+  file: "master_catalog.csv"            # Relative path to data source file within this folder
+  tables:
+    products: "Primary canonical business records (id, name, base_price, category, status)"
+
+mapping:
+  aem_node_type: "cq:Page"              # Target JCR node type for authored pages
+  fields:
+    id: "productId"                     # Master Registry Column <-> AEM JCR property name
+    base_price: "authoredPrice"
+    name: "jcr:title"
+    status: "pageStatus"
+
+audit_rules:
+  # Rule 1: Cross-Reference Pricing Parity Check
+  - id: "pricing_parity"
+    name: "Authored Price vs ERP Base Price"
+    severity: "CRITICAL"
+    rule_type: "cross_reference"
+    condition: "aem.authoredPrice != registry.base_price"
+    message: "Authored marketing price does not match canonical ERP pricing"
+
+  # Rule 2: Active Lifecycle State Check
+  - id: "discontinued_item_live"
+    name: "Discontinued Catalog Item Active on Site"
+    severity: "HIGH"
+    rule_type: "cross_reference"
+    condition: "registry.status == 'DISCONTINUED' and aem.pageStatus == 'ACTIVE'"
+    message: "Product is discontinued in master ERP but published active on website"
+
+  # Rule 3: Digital Asset Management Reference Check
+  - id: "missing_hero_render"
+    name: "Missing Hero DAM Image"
+    severity: "CRITICAL"
+    rule_type: "dam_asset"
+    path_property: "heroImage/fileReference"
+    message: "Authored hero image points to non-existent DAM repository asset"
