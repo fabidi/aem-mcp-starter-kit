@@ -44,7 +44,8 @@ from aem_mcp.datasets.engine import (
     match_datasets,
     export_dataset,
     discard_dataset,
-    cleanup_expired_datasets
+    cleanup_expired_datasets,
+    import_dataset_file
 )
 
 cleanup_expired_datasets()
@@ -110,41 +111,52 @@ def _get_aem_json(path: str, params: dict[str, Any] | None = None) -> Any:
 
 @mcp.resource("aem://prompt")
 def aem_prompt_resource() -> str:
-    """Canonical operating instructions for AEM Content Intelligence reflecting active domain."""
+    """Canonical operating instructions for AEM Content Intelligence reflecting active domain and mode."""
+    if CONFIG.is_pure_aem():
+        return get_canonical_prompt(
+            root_path="/content",
+            is_pure_aem=True
+        )
     p = DOMAIN_MANAGER.active_profile
     return get_canonical_prompt(
         domain_name=p.name,
         root_path=p.root_path,
-        primary_entity=p.primary_entity
+        primary_entity=p.primary_entity,
+        is_pure_aem=False
     )
 
 
 @mcp.resource("aem://runtime")
 def aem_runtime_resource() -> str:
     """Safe active-environment runtime configuration."""
-    p = DOMAIN_MANAGER.active_profile
     info = get_runtime_info()
-    info.update({
-        "domain_id": p.id,
-        "domain_name": p.name,
-        "root_path": p.root_path,
-        "primary_entity": p.primary_entity,
-        "data_source_type": p.data_source_type,
-        "data_source_file": p.data_source_file,
-        "audit_rules_count": str(len(p.audit_rules)),
-    })
+    if not CONFIG.is_pure_aem():
+        p = DOMAIN_MANAGER.active_profile
+        info.update({
+            "domain_id": p.id,
+            "domain_name": p.name,
+            "root_path": p.root_path,
+            "primary_entity": p.primary_entity,
+            "data_source_type": p.data_source_type,
+            "data_source_file": p.data_source_file,
+            "audit_rules_count": str(len(p.audit_rules)),
+        })
+    else:
+        info.update({
+            "pure_aem_mode": "True",
+            "root_path": "/content",
+            "description": "Operating in Pure AEM Content Intelligence & Oak Indexing mode."
+        })
     return json.dumps(info, indent=2)
 
 
-# --- Master Entity Registry Tools ---
+# --- Master Entity Registry Tools (Registered conditionally when CONFIG.enable_registry is True) ---
 
-@mcp.tool()
 def registry_indexes() -> str:
     """List available Master Entity Registry indexes (properties, brands, destinations)."""
     return json.dumps(get_registry_indexes(), indent=2)
 
 
-@mcp.tool()
 def registry_search(
     index: str,
     query: str = "",
@@ -157,14 +169,12 @@ def registry_search(
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def registry_get(index: str, identifier: str) -> str:
     """Retrieve one canonical business entity record by primary identifier (e.g. hotel_id or brand_id)."""
     res = get_registry_entity(index=index, identifier=identifier)
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def registry_query_dataset(
     index: str,
     query: str = "",
@@ -478,6 +488,17 @@ def dataset_discard(dataset_id: str) -> str:
     return json.dumps({"dataset_id": dataset_id, "deleted": deleted})
 
 
+@mcp.tool()
+def dataset_import(file_path: str, format: str = "auto", name: str = "") -> str:
+    """
+    Import an external structured file (CSV, JSON array, or JSON Lines) directly into an on-disk SQLite dataset table.
+    Enables external enterprise MCPs (Snowflake, Postgres, SAP, Salsify) to pass data for
+    cross-system matching with AEM content without dumping raw rows into the LLM context window.
+    """
+    res = import_dataset_file(file_path=file_path, fmt=format, name=name)
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
 # --- Content & Discrepancy Auditing Tools ---
 
 @mcp.tool()
@@ -749,9 +770,8 @@ def aem_lint_query_indexing(query: dict[str, Any]) -> str:
     return json.dumps(report, ensure_ascii=False, indent=2)
 
 
-# --- Multi-Domain Management & Governance Tools ---
+# --- Multi-Domain Management & Governance Tools (Registered conditionally when CONFIG.enable_registry is True) ---
 
-@mcp.tool()
 def domain_list() -> str:
     """
     List available enterprise domain profiles (Hospitality, Automotive, Retail)
@@ -777,7 +797,6 @@ def domain_list() -> str:
     }, indent=2)
 
 
-@mcp.tool()
 def domain_switch(name: str) -> str:
     """
     Switch the active enterprise domain profile (e.g. 'hospitality', 'automotive', 'retail').
@@ -800,7 +819,6 @@ def domain_switch(name: str) -> str:
         return json.dumps({"success": False, "error": str(e)}, indent=2)
 
 
-@mcp.tool()
 def domain_get_active() -> str:
     """
     Get detailed information about the active enterprise domain profile,
@@ -831,7 +849,6 @@ def domain_get_active() -> str:
     }, indent=2)
 
 
-@mcp.tool()
 def aem_audit_domain_rules(domain: str = "", limit: int = 100) -> str:
     """
     Executes declarative domain governance rules for the active (or specified) domain,
@@ -843,6 +860,18 @@ def aem_audit_domain_rules(domain: str = "", limit: int = 100) -> str:
     assert _SIMULATOR is not None
     findings = DOMAIN_MANAGER.evaluate_audit_rules(_SIMULATOR, limit=limit)
     return json.dumps(findings, indent=2)
+
+
+# Conditionally register Reference Registry and Multi-Domain tools if enabled
+if CONFIG.enable_registry:
+    mcp.tool()(registry_indexes)
+    mcp.tool()(registry_search)
+    mcp.tool()(registry_get)
+    mcp.tool()(registry_query_dataset)
+    mcp.tool()(domain_list)
+    mcp.tool()(domain_switch)
+    mcp.tool()(domain_get_active)
+    mcp.tool()(aem_audit_domain_rules)
 
 
 def main():

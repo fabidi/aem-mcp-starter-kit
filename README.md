@@ -101,6 +101,31 @@ audit_rules:
 
 ---
 
+## 🏛️ Composable Architecture: Starter Kit vs. Pure Enterprise AEM Mode
+
+Because the Model Context Protocol (MCP) strictly isolates servers without an inter-server data bus, passing thousands of catalog rows between two independent MCP servers through an LLM context window causes severe token bloat and latency. This starter kit solves this via a **Composable CQRS Pattern**:
+
+| Operational Mode | Configuration | Tools Registered | Recommended Use |
+| :--- | :--- | :--- | :--- |
+| **Batteries-Included Starter Kit** *(Default)* | `AEM_MCP_ENABLE_REGISTRY=true` | Pure AEM tools + Reference Registries (`registry_*`) + Multi-Domain profiles + SQLite analytics | 60-second evaluation, local testing, and multi-system reconciliation demos out of the box. |
+| **Pure Enterprise AEM Mode** | `AEM_MCP_ENABLE_REGISTRY=false` | 100% Pure AEM JCR tools + Oak Index Linter + Universal Dataset Engine (`dataset_*`) | Production environments where SAP, Salesforce, Salsify, or Snowflake operate on their own dedicated enterprise MCPs. |
+
+### Bridging External Enterprise MCPs (Zero-Token Overhead)
+In enterprise setups, your **Snowflake, SAP, or Postgres MCP** simply drops an extract to disk (CSV, JSON, or JSONL). The agent then streams it directly into our analytical SQLite engine:
+```python
+# 1. External MCP drops data -> Ingest into SQLite WAL without touching LLM context tokens:
+dataset_import(file_path="exports/sap_inventory.csv")    # -> ds_ext
+
+# 2. Stream AEM authored pages into SQLite:
+aem_query_dataset(query={"path": "/content/site"})      # -> ds_aem
+
+# 3. Server-side join in SQLite at native C-speed (2ms):
+dataset_match(left_id="ds_aem", right_id="ds_ext", left_field="sku", right_field="sku")
+```
+The raw rows never touch the LLM conversation history—the agent only sees clean aggregate stats and discrepancy counts!
+
+---
+
 ## 60-Second Quickstart
 
 ### 1. Installation
@@ -249,6 +274,7 @@ Add to your project's `.cursor/mcp.json`:
 ### Dataset Analysis & Export Tools
 | Tool | Description |
 | :--- | :--- |
+| `dataset_import(file_path, format, name)` | Ingest external CSV, JSON, or JSONL files into on-disk SQLite dataset table for zero-token cross-system reconciliation. |
 | `dataset_info(dataset_id)` | View row counts and metadata of a materialized query dataset. |
 | `dataset_get_rows(dataset_id, offset, limit)` | Read a bounded slice of rows. |
 | `dataset_analyze(dataset_id, operation, field)` | Perform server-side `group_by`, `count`, `missing`, or `filter` aggregations. |

@@ -135,6 +135,119 @@ def materialize_dataset(rows: list[dict[str, Any]], metadata: dict[str, Any]) ->
     return builder.dataset_id
 
 
+def import_dataset_file(
+    file_path: str | Path,
+    fmt: str = "auto",
+    name: str = "",
+    metadata: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """
+    Import an external structured file (CSV, JSON array, or JSON Lines)
+    directly into an on-disk SQLite dataset table (ds_<12hex>).
+
+    Streams batches via StreamingDatasetBuilder with bounded RAM O(batch_size)
+    and SQLite WAL mode, preventing context window bloat when bridging external
+    MCP data (e.g. Snowflake, SAP, Postgres, Salsify) into the analytics engine.
+    """
+    path = Path(file_path).resolve()
+    if not path.is_file():
+        raise FileNotFoundError(f"Source file not found: {file_path}")
+
+    detected_fmt = fmt.lower().strip()
+    if detected_fmt == "auto":
+        suffix = path.suffix.lower()
+        if suffix == ".csv":
+            detected_fmt = "csv"
+        elif suffix in (".jsonl", ".ndjson"):
+            detected_fmt = "jsonl"
+        elif suffix == ".json":
+            detected_fmt = "json"
+        else:
+            detected_fmt = "csv"
+
+    dataset_name = name or path.stem
+    meta = {
+        "source": "import_file",
+        "file_name": path.name,
+        "file_path": str(path),
+        "format": detected_fmt,
+        "dataset_name": dataset_name,
+        **(metadata or {})
+    }
+
+    with StreamingDatasetBuilder(metadata=meta) as builder:
+        batch: list[dict[str, Any]] = []
+        batch_size = 500
+
+        if detected_fmt == "csv":
+            with open(path, "r", encoding="utf-8-sig", errors="replace") as f:
+                reader = csv.DictReader(f)
+                for row in reader:
+                    cleaned = {str(k).strip(): v for k, v in row.items() if k is not None}
+                    batch.append(cleaned)
+                    if len(batch) >= batch_size:
+                        builder.append_batch(batch)
+                        batch = []
+                if batch:
+                    builder.append_batch(batch)
+
+        elif detected_fmt == "jsonl":
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line_str = line.strip()
+                    if not line_str:
+                        continue
+                    try:
+                        obj = json.loads(line_str)
+                        if isinstance(obj, dict):
+                            batch.append(obj)
+                    except json.JSONDecodeError:
+                        continue
+                    if len(batch) >= batch_size:
+                        builder.append_batch(batch)
+                        batch = []
+                if batch:
+                    builder.append_batch(batch)
+
+        elif detected_fmt == "json":
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                content = json.load(f)
+            if isinstance(content, list):
+                for item in content:
+                    if isinstance(item, dict):
+                        batch.append(item)
+                    if len(batch) >= batch_size:
+                        builder.append_batch(batch)
+                        batch = []
+                if batch:
+                    builder.append_batch(batch)
+            elif isinstance(content, dict):
+                records = content.get("results") or content.get("items") or content.get("data") or [content]
+                if isinstance(records, list):
+                    for item in records:
+                        if isinstance(item, dict):
+                            batch.append(item)
+                        if len(batch) >= batch_size:
+                            builder.append_batch(batch)
+                            batch = []
+                    if batch:
+                        builder.append_batch(batch)
+
+        ds_id = builder.dataset_id
+        row_count = builder.row_count
+
+    sample = get_dataset_rows(ds_id, offset=0, limit=5)
+    return {
+        "dataset_id": ds_id,
+        "name": dataset_name,
+        "source_file": str(path),
+        "format": detected_fmt,
+        "row_count": row_count,
+        "sample": sample,
+        "next": f"Use dataset_analyze(dataset_id='{ds_id}') or dataset_match(left_dataset_id='<aem_dataset_id>', right_dataset_id='{ds_id}', left_field='...', right_field='...')"
+    }
+
+
 def get_dataset_metadata(dataset_id: str) -> dict[str, Any]:
     conn = _dataset_connection(dataset_id)
     try:

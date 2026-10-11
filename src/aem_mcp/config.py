@@ -24,7 +24,15 @@ class Config:
         self.ims_client_secret = os.getenv("AEM_IMS_CLIENT_SECRET", "")
         self.ims_org_id = os.getenv("AEM_IMS_ORG_ID", "")
 
+        # Reference Registry / Decoupled Architecture Toggle
+        # Default: True (Batteries included for quickstart demo & local testing)
+        # Set AEM_MCP_ENABLE_REGISTRY=false for Pure AEM Mode in enterprise production
+        self.enable_registry: bool = os.getenv("AEM_MCP_ENABLE_REGISTRY", "true").lower() in ("true", "1", "yes")
+
     def is_mock(self) -> bool:
         return self.mode == "mock"
+
+    def is_pure_aem(self) -> bool:
+        return not self.enable_registry
 
 CONFIG = Config()

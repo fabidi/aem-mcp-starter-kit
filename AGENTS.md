@@ -14,11 +14,10 @@ You are an Autonomous Integration Agent. Your goal is to connect this AEM Conten
 
 ### Phase 1: Environment & Connectivity Diagnostics
 Check the operating mode and verify connectivity:
-1. Inspect runtime environment: Read MCP resource `aem://runtime` or check `AEM_MODE` environment variable.
-2. Modes:
-   - `AEM_MODE=mock`: Uses local synthetic simulator (no live AEM required).
-   - `AEM_MODE=onprem`: Connects to live AEM 6.5 / On-Prem via `AEM_URL`, `AEM_USERNAME`, `AEM_PASSWORD`.
-   - `AEM_MODE=cloud`: Connects to AEM as a Cloud Service via `AEM_URL`, `AEM_IMS_CLIENT_ID`, `AEM_IMS_CLIENT_SECRET`, `AEM_IMS_ORG_ID`.
+1. Inspect runtime environment: Read MCP resource `aem://runtime` or check environment variables:
+   - `AEM_MODE`: `mock` (virtual simulator), `onprem` (AEM 6.5 basic auth), or `cloud` (AEM CS OAuth).
+   - `AEM_MCP_ENABLE_REGISTRY`: `true` (default: starter kit with reference registry) or `false` (Pure AEM Mode for enterprise production where external systems have dedicated MCPs).
+2. Read MCP resource `aem://prompt` for domain-specific instructions and safety guardrails.
 3. Verify basic connectivity by running `aem_querybuilder(query={"path": "/content", "p.limit": "1"})`.
 
 ---
@@ -63,12 +62,19 @@ Activate and verify the new domain:
 Verify the integration with an end-to-end audit:
 1. **Option A: Declarative Audit:**
    Call `aem_audit_domain_rules()` to evaluate all YAML rules across the site tree.
-2. **Option B: Bulk Dataset Reconciliation:**
+2. **Option B: Bulk Dataset Reconciliation (Starter Kit):**
    - Stream AEM pages: `aem_query_dataset(query={"path": "<root_path>", "type": "cq:Page"}, properties=["<key>", "<field>"])` $\rightarrow$ `ds_aem`
    - Stream Master data: `registry_query_dataset(index="<table_name>")` $\rightarrow$ `ds_master`
    - Reconcile: `dataset_match(left_dataset_id="ds_aem", right_dataset_id="ds_master", left_field="<jcr_key>", right_field="<reg_key>")`
    - Export: `dataset_export(dataset_id="<match_id>", format="xlsx")` $\rightarrow$ returns download link.
-3. Run `pytest -v` to ensure zero regressions across the MCP tool suite.
+3. **Option C: External Enterprise MCP Ingestion (Pure AEM Mode):**
+   When working alongside an external database or enterprise MCP (Snowflake, SAP, Postgres, Salsify):
+   - Instruct the external MCP to dump an extract file (CSV, JSON, or JSONL) to `exports/`.
+   - Ingest into SQLite WAL: `dataset_import(file_path="exports/master_catalog.csv")` $\rightarrow$ `ds_ext`
+   - Stream AEM pages: `aem_query_dataset(...)` $\rightarrow$ `ds_aem`
+   - Reconcile: `dataset_match(left_dataset_id="ds_aem", right_dataset_id="ds_ext", left_field="<jcr_key>", right_field="<ext_key>")`
+   - Zero tokens are wasted passing raw rows through conversation context!
+4. Run `pytest -v` to ensure zero regressions across the MCP tool suite.
 
 ---
 

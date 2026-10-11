@@ -55,7 +55,8 @@ The MCP provides a dedicated suite of tools specifically for discovering, inspec
 | `registry_indexes()` | Lists canonical tables and record counts in the active data source. | Discovers available entity collections (e.g. `vehicles`, `hotels`, `products`). |
 | `registry_search(...)` | Structured search over canonical records with filters. | Looks up specific entities (e.g. `city="Paris"` or `brand="Grand"`). |
 | `registry_get(index, id)` | Single-record lookup by primary key (`hotel_id`, `vin_prefix`, `sku`). | Fast fact-checking for an individual authored page. |
-| `registry_query_dataset(...)` | **Bulk Ingestion:** Materializes entire canonical tables into a local SQLite dataset. | Streams 50,000 master records into a dataset to prepare for a cross-system join. |
+| `registry_query_dataset(...)` | **Bulk Ingestion (Reference Registry):** Materializes entire canonical tables into a local SQLite dataset. | Streams 50,000 master records into a dataset to prepare for a cross-system join. |
+| `dataset_import(file_path, ...)` | **Universal Ingestion Bridge:** Ingests external CSV, JSON, or JSONL files into on-disk SQLite datasets. | Ingests dumps from external Snowflake, SAP, Postgres, or PIM MCPs with zero token overhead. |
 | `dataset_match(...)` | **The Reconciliation Engine:** Performs inner/outer joins between AEM and Master datasets. | Isolates discrepancies: price desyncs, stale ratings, orphan pages. |
 
 ---
