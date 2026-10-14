@@ -150,20 +150,29 @@ def import_dataset_file(
     MCP data (e.g. Snowflake, SAP, Postgres, Salsify) into the analytics engine.
     """
     path = Path(file_path).resolve()
+    if path.name.startswith("."):
+        raise ValueError(f"Importing hidden dot-files is not permitted: '{path.name}'")
     if not path.is_file():
         raise FileNotFoundError(f"Source file not found: {file_path}")
 
+    allowed_extensions = {".csv", ".json", ".jsonl", ".ndjson"}
+    suffix = path.suffix.lower()
+    if suffix not in allowed_extensions:
+        raise ValueError(
+            f"Unsupported file extension '{suffix or '<none>'}'. "
+            f"Allowed extensions: {', '.join(sorted(allowed_extensions))}"
+        )
+
     detected_fmt = fmt.lower().strip()
     if detected_fmt == "auto":
-        suffix = path.suffix.lower()
         if suffix == ".csv":
             detected_fmt = "csv"
         elif suffix in (".jsonl", ".ndjson"):
             detected_fmt = "jsonl"
         elif suffix == ".json":
             detected_fmt = "json"
-        else:
-            detected_fmt = "csv"
+    elif detected_fmt not in ("csv", "json", "jsonl"):
+        raise ValueError(f"Unsupported import format '{fmt}'. Use 'auto', 'csv', 'json', or 'jsonl'.")
 
     dataset_name = name or path.stem
     meta = {
@@ -477,87 +486,129 @@ def match_datasets(
     right_field: str,
     match_type: str = "exact"
 ) -> dict[str, Any]:
-    """Join two datasets on a key and identify matches, orphans, and discrepancies."""
-    left_rows = get_dataset_rows(left_dataset_id, offset=0, limit=100000)
-    right_rows = get_dataset_rows(right_dataset_id, offset=0, limit=100000)
-
+    """
+    Join two datasets on a key and identify matches, orphans, and discrepancies.
+    Streams reconciled rows into an on-disk SQLite dataset via StreamingDatasetBuilder
+    in batches of 500 to avoid materializing large joined lists in memory.
+    """
     right_lookup: dict[str, list[dict[str, Any]]] = {}
-    for r in right_rows:
-        val = str(r.get(right_field, "")).strip().lower()
-        if val:
-            right_lookup.setdefault(val, []).append(r)
+    right_conn = _dataset_connection(right_dataset_id)
+    try:
+        for row_rec in right_conn.execute("SELECT data FROM rows ORDER BY row_number"):
+            r = json.loads(row_rec["data"])
+            val = str(r.get(right_field, "")).strip().lower()
+            if val:
+                right_lookup.setdefault(val, []).append(r)
+    finally:
+        right_conn.close()
 
-    reconciled = []
-    matched_right_keys = set()
+    matched_right_keys: set[str] = set()
+    matched_count = 0
+    discrepancy_count = 0
+    left_only_count = 0
+    right_only_count = 0
+    sample: list[dict[str, Any]] = []
+    batch: list[dict[str, Any]] = []
+    batch_size = 500
 
-    for l_row in left_rows:
-        l_key = str(l_row.get(left_field, "")).strip().lower()
-        r_matches = right_lookup.get(l_key, [])
+    meta = {
+        "type": "reconciliation",
+        "left_dataset_id": left_dataset_id,
+        "right_dataset_id": right_dataset_id,
+        "left_field": left_field,
+        "right_field": right_field,
+    }
 
-        if r_matches:
-            matched_right_keys.add(l_key)
-            for r_row in r_matches:
-                # Detect discrepancies across common field names
-                discrepancies = []
-                for common_col in set(l_row.keys()) & set(r_row.keys()):
-                    if common_col in {left_field, right_field}:
-                        continue
-                    l_val, r_val = str(l_row.get(common_col)), str(r_row.get(common_col))
-                    if l_val.lower() != r_val.lower():
-                        discrepancies.append(f"{common_col}: left='{l_val}' vs right='{r_val}'")
+    with StreamingDatasetBuilder(metadata=meta) as builder:
+        left_conn = _dataset_connection(left_dataset_id)
+        try:
+            for row_rec in left_conn.execute("SELECT data FROM rows ORDER BY row_number"):
+                l_row = json.loads(row_rec["data"])
+                l_key = str(l_row.get(left_field, "")).strip().lower()
+                r_matches = right_lookup.get(l_key, [])
 
-                entry = {
-                    "match_status": "MATCHED",
-                    "match_key": l_key,
-                    "discrepancies": discrepancies,
-                    "has_discrepancy": len(discrepancies) > 0,
-                    **{f"left_{k}": v for k, v in l_row.items()},
-                    **{f"right_{k}": v for k, v in r_row.items()},
-                }
-                reconciled.append(entry)
-        else:
-            reconciled.append({
-                "match_status": "LEFT_ONLY",
-                "match_key": l_key,
-                "discrepancies": ["No matching right record found"],
-                "has_discrepancy": True,
-                **{f"left_{k}": v for k, v in l_row.items()}
-            })
+                if r_matches:
+                    matched_right_keys.add(l_key)
+                    for r_row in r_matches:
+                        discrepancies = []
+                        for common_col in set(l_row.keys()) & set(r_row.keys()):
+                            if common_col in {left_field, right_field}:
+                                continue
+                            l_val, r_val = str(l_row.get(common_col)), str(r_row.get(common_col))
+                            if l_val.lower() != r_val.lower():
+                                discrepancies.append(f"{common_col}: left='{l_val}' vs right='{r_val}'")
 
-    # Unmatched right records
-    for r_key, r_rows in right_lookup.items():
-        if r_key not in matched_right_keys:
-            for r_row in r_rows:
-                reconciled.append({
-                    "match_status": "RIGHT_ONLY",
-                    "match_key": r_key,
-                    "discrepancies": ["No matching left record found"],
-                    "has_discrepancy": True,
-                    **{f"right_{k}": v for k, v in r_row.items()}
-                })
+                        has_disc = len(discrepancies) > 0
+                        entry = {
+                            "match_status": "MATCHED",
+                            "match_key": l_key,
+                            "discrepancies": discrepancies,
+                            "has_discrepancy": has_disc,
+                            **{f"left_{k}": v for k, v in l_row.items()},
+                            **{f"right_{k}": v for k, v in r_row.items()},
+                        }
+                        matched_count += 1
+                        if has_disc:
+                            discrepancy_count += 1
+                        if len(sample) < 10:
+                            sample.append(entry)
+                        batch.append(entry)
+                        if len(batch) >= batch_size:
+                            builder.append_batch(batch)
+                            batch = []
+                else:
+                    entry = {
+                        "match_status": "LEFT_ONLY",
+                        "match_key": l_key,
+                        "discrepancies": ["No matching right record found"],
+                        "has_discrepancy": True,
+                        **{f"left_{k}": v for k, v in l_row.items()}
+                    }
+                    left_only_count += 1
+                    discrepancy_count += 1
+                    if len(sample) < 10:
+                        sample.append(entry)
+                    batch.append(entry)
+                    if len(batch) >= batch_size:
+                        builder.append_batch(batch)
+                        batch = []
+        finally:
+            left_conn.close()
 
-    new_ds_id = materialize_dataset(
-        reconciled,
-        {
-            "type": "reconciliation",
-            "left_dataset_id": left_dataset_id,
-            "right_dataset_id": right_dataset_id,
-            "left_field": left_field,
-            "right_field": right_field,
-        }
-    )
+        # Unmatched right records
+        for r_key, r_rows in right_lookup.items():
+            if r_key not in matched_right_keys:
+                for r_row in r_rows:
+                    entry = {
+                        "match_status": "RIGHT_ONLY",
+                        "match_key": r_key,
+                        "discrepancies": ["No matching left record found"],
+                        "has_discrepancy": True,
+                        **{f"right_{k}": v for k, v in r_row.items()}
+                    }
+                    right_only_count += 1
+                    discrepancy_count += 1
+                    if len(sample) < 10:
+                        sample.append(entry)
+                    batch.append(entry)
+                    if len(batch) >= batch_size:
+                        builder.append_batch(batch)
+                        batch = []
 
-    matched_count = sum(1 for r in reconciled if r["match_status"] == "MATCHED")
-    discrepancy_count = sum(1 for r in reconciled if r.get("has_discrepancy"))
+        if batch:
+            builder.append_batch(batch)
+
+        new_ds_id = builder.dataset_id
+        total_rows = builder.row_count
 
     return {
         "dataset_id": new_ds_id,
-        "total_rows": len(reconciled),
+        "total_rows": total_rows,
         "matched_count": matched_count,
         "discrepancy_count": discrepancy_count,
-        "left_only_count": sum(1 for r in reconciled if r["match_status"] == "LEFT_ONLY"),
-        "right_only_count": sum(1 for r in reconciled if r["match_status"] == "RIGHT_ONLY"),
-        "sample": reconciled[:10]
+        "left_only_count": left_only_count,
+        "right_only_count": right_only_count,
+        "sample": sample
     }
 
 

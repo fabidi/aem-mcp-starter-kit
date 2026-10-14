@@ -5,6 +5,7 @@ Supports SQLite, CSV, and JSON master data sources with declarative governance r
 
 from __future__ import annotations
 
+import ast
 import csv
 import json
 import logging
@@ -44,13 +45,13 @@ class DomainManager:
             self._switch_listeners.append(callback)
 
     def discover_profiles(self) -> None:
-        """Scan domains directory and register all domain.yaml configurations."""
+        """Scan domains directory and register all domain.yaml configurations (skipping _template and hidden folders)."""
         self.profiles.clear()
         if not self.domains_dir.exists():
             return
 
         for domain_folder in self.domains_dir.iterdir():
-            if not domain_folder.is_dir():
+            if not domain_folder.is_dir() or domain_folder.name.startswith(("_", ".")):
                 continue
             config_file = domain_folder / "domain.yaml"
             if not config_file.exists():
@@ -476,7 +477,7 @@ class DomainManager:
                             aem_id = node_data.get(aem_fld)
                             break
                     if not aem_id:
-                        for cand in ["vinPrefix", "sku", "hotelId", "id"]:
+                        for cand in ["vinPrefix", "sku", "hotelId", "id", "entityId"]:
                             if cand in node_data:
                                 aem_id = node_data[cand]
                                 break
@@ -488,51 +489,14 @@ class DomainManager:
                     if not canon_rec:
                         continue
 
-                    condition = rule.condition or ""
-                    is_discrepancy = False
-                    msg = rule.message
-
-                    if "aem.msrp != registry.base_msrp" in condition:
-                        aem_val = str(node_data.get("msrp", "")).replace("$", "").replace(",", "").strip()
-                        reg_val = str(canon_rec.get("base_msrp", "")).replace("$", "").replace(",", "").strip()
-                        if aem_val and reg_val and aem_val != reg_val:
-                            is_discrepancy = True
-                            msg = f"Authored MSRP (${aem_val}) differs from ERP Base MSRP (${reg_val})"
-
-                    elif "registry.status == 'DISCONTINUED' and aem.status == 'ACTIVE'" in condition:
-                        reg_stat = str(canon_rec.get("status", "")).upper()
-                        aem_stat = str(node_data.get("status", "")).upper()
-                        if reg_stat == "DISCONTINUED" and aem_stat == "ACTIVE":
-                            is_discrepancy = True
-                            msg = "Vehicle is discontinued in manufacturing ERP but published active on website"
-
-                    elif "aem.price != registry.price" in condition:
-                        aem_val = str(node_data.get("price", "")).replace("$", "").replace(",", "").strip()
-                        reg_val = str(canon_rec.get("price", "")).replace("$", "").replace(",", "").strip()
-                        if aem_val and reg_val and aem_val != reg_val:
-                            is_discrepancy = True
-                            msg = f"Authored price (${aem_val}) differs from canonical PIM price (${reg_val})"
-
-                    elif "registry.in_stock == 'false' and aem.inStock == 'true'" in condition:
-                        reg_stock = str(canon_rec.get("in_stock", "")).lower()
-                        aem_stock = str(node_data.get("inStock", "")).lower()
-                        if reg_stock == "false" and aem_stock == "true":
-                            is_discrepancy = True
-                            msg = "Product is out of stock in PIM inventory but marked in-stock on website"
-
-                    elif "aem.authoredStarRating != registry.star_rating" in condition:
-                        aem_rating = str(node_data.get("authoredStarRating", ""))
-                        reg_rating = str(canon_rec.get("star_rating", ""))
-                        if aem_rating and reg_rating and aem_rating != reg_rating:
-                            is_discrepancy = True
-                            msg = f"Authored rating ({aem_rating}*) differs from PMS star rating ({reg_rating}*)"
-
-                    elif "registry.operating_status == 'Renovating' and aem.operatingStatus == 'Active'" in condition:
-                        reg_stat = str(canon_rec.get("operating_status", ""))
-                        aem_stat = str(node_data.get("operatingStatus", ""))
-                        if reg_stat == "Renovating" and aem_stat == "Active":
-                            is_discrepancy = True
-                            msg = "Property is undergoing renovation in PMS but published as Active on website"
+                    is_discrepancy, msg = self._evaluate_rule_condition(
+                        condition=rule.condition or "",
+                        node_data=node_data,
+                        canon_rec=canon_rec,
+                        default_msg=rule.message,
+                        aem_property=rule.aem_property,
+                        registry_column=rule.registry_column,
+                    )
 
                     if is_discrepancy:
                         findings.append({
@@ -552,6 +516,138 @@ class DomainManager:
             "total_findings": len(findings),
             "findings": findings
         }
+
+    @staticmethod
+    def _normalize_scalar(val: Any) -> tuple[bool, Any]:
+        """
+        Normalize a scalar value for comparison.
+        Returns (is_empty, normalized_value) where numeric strings like '$89,900' become float(89900.0).
+        """
+        if val is None:
+            return True, None
+        if isinstance(val, bool):
+            return False, "true" if val else "false"
+        if isinstance(val, (int, float)):
+            return False, float(val)
+        s = str(val).strip()
+        if not s:
+            return True, ""
+        # Strip currency symbols and thousands separators if numeric
+        cleaned = s.replace("$", "").replace(",", "").strip()
+        try:
+            return False, float(cleaned)
+        except ValueError:
+            return False, s.lower()
+
+    @classmethod
+    def _compare_values(cls, left_raw: Any, right_raw: Any, op: ast.cmpop) -> bool:
+        left_empty, left_val = cls._normalize_scalar(left_raw)
+        right_empty, right_val = cls._normalize_scalar(right_raw)
+
+        # If either side is missing/empty (unauthored property), do not flag a discrepancy
+        # unless comparing two empty values for equality
+        if left_empty or right_empty:
+            if left_empty and right_empty:
+                return isinstance(op, ast.Eq)
+            return False
+
+        # If one is float and the other is string (e.g. 'true'), compare as lowercased strings
+        if isinstance(left_val, float) != isinstance(right_val, float):
+            left_val = str(left_raw).strip().lower()
+            right_val = str(right_raw).strip().lower()
+
+        if isinstance(op, ast.Eq):
+            return left_val == right_val
+        if isinstance(op, ast.NotEq):
+            return left_val != right_val
+        if isinstance(op, ast.Lt):
+            return left_val < right_val
+        if isinstance(op, ast.LtE):
+            return left_val <= right_val
+        if isinstance(op, ast.Gt):
+            return left_val > right_val
+        if isinstance(op, ast.GtE):
+            return left_val >= right_val
+        return False
+
+    @classmethod
+    def _evaluate_rule_condition(
+        cls,
+        condition: str,
+        node_data: Dict[str, Any],
+        canon_rec: Dict[str, Any],
+        default_msg: str = "",
+        aem_property: Optional[str] = None,
+        registry_column: Optional[str] = None,
+    ) -> tuple[bool, str]:
+        """
+        Safely parses and evaluates a declarative governance condition from domain.yaml
+        using Python's AST (mode='eval') without eval().
+        Supports expressions like:
+          - "aem.msrp != registry.base_msrp"
+          - "registry.status == 'DISCONTINUED' and aem.status == 'ACTIVE'"
+          - "aem.price < registry.min_price or aem.discount > 50"
+        Also supports simple property mapping fallback when only aem_property + registry_column are set.
+        """
+        expr_str = condition.strip()
+        if not expr_str and aem_property and registry_column:
+            expr_str = f"aem.{aem_property} != registry.{registry_column}"
+        if not expr_str:
+            return False, default_msg
+
+        observed: Dict[str, Any] = {}
+
+        def _resolve_node(node: ast.AST) -> Any:
+            if isinstance(node, ast.Constant):
+                return node.value
+            if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name):
+                ns = node.value.id
+                attr = node.attr
+                if ns == "aem":
+                    val = node_data.get(attr)
+                    observed[f"aem.{attr}"] = val
+                    return val
+                if ns == "registry":
+                    val = canon_rec.get(attr)
+                    observed[f"registry.{attr}"] = val
+                    return val
+                raise ValueError(f"Unsupported namespace '{ns}' in rule condition")
+            if isinstance(node, ast.BoolOp):
+                if isinstance(node.op, ast.And):
+                    return all(bool(_resolve_node(v)) for v in node.values)
+                if isinstance(node.op, ast.Or):
+                    return any(bool(_resolve_node(v)) for v in node.values)
+                raise ValueError("Unsupported boolean operator")
+            if isinstance(node, ast.UnaryOp):
+                if isinstance(node.op, ast.Not):
+                    return not bool(_resolve_node(node.operand))
+                if isinstance(node.op, ast.USub):
+                    operand = _resolve_node(node.operand)
+                    return -operand if isinstance(operand, (int, float)) else None
+                raise ValueError("Unsupported unary operator")
+            if isinstance(node, ast.Compare):
+                left = _resolve_node(node.left)
+                for op, comparator in zip(node.ops, node.comparators):
+                    right = _resolve_node(comparator)
+                    if not cls._compare_values(left, right, op):
+                        return False
+                    left = right
+                return True
+            raise ValueError(f"Unsupported AST node '{type(node).__name__}' in rule condition")
+
+        try:
+            parsed = ast.parse(expr_str, mode="eval")
+            triggered = bool(_resolve_node(parsed.body))
+        except Exception as e:
+            logger.warning("Failed evaluating audit rule condition '%s': %s", expr_str, e)
+            return False, default_msg
+
+        if not triggered:
+            return False, default_msg
+
+        details = ", ".join(f"{k}={v!r}" for k, v in observed.items())
+        msg = f"{default_msg} ({details})" if (default_msg and details) else (default_msg or details)
+        return True, msg
 
 
 DOMAIN_MANAGER = DomainManager()

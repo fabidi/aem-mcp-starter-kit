@@ -16,6 +16,17 @@ from typing import Any, Callable
 from aem_mcp.config import CONFIG
 
 
+def _safe_get_node(
+    node_getter: Callable[[str], dict[str, Any] | None],
+    path: str
+) -> dict[str, Any] | None:
+    try:
+        res = node_getter(path)
+        return res if isinstance(res, dict) else None
+    except Exception:
+        return None
+
+
 def audit_content_integrity(
     node_getter: Callable[[str], dict[str, Any] | None],
     root_path: str = "/content/novaria",
@@ -23,10 +34,12 @@ def audit_content_integrity(
     check_promos: bool = True,
     check_fragments: bool = True,
     limit: int = 100,
-    all_nodes: dict[str, Any] | None = None
+    all_nodes: dict[str, Any] | None = None,
+    query_runner: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Audit AEM pages under root_path for broken references, expired campaigns, and incomplete fragments.
+    Works in both simulator mode (all_nodes) and live HTTP mode (query_runner + node_getter).
     """
     limit = min(max(int(limit), 1), 500)
     anomalies: list[dict[str, Any]] = []
@@ -38,9 +51,18 @@ def audit_content_integrity(
             if (path == root_path or path.startswith(root_path + "/"))
             and node.get("jcr:primaryType") == "cq:Page"
         ]
+    elif query_runner is not None:
+        q_res = query_runner({"path": root_path, "type": "cq:Page", "p.limit": "500"})
+        target_pages = []
+        for hit in q_res.get("hits", []):
+            p = hit.get("path") or hit.get("jcr:path")
+            if p:
+                node = _safe_get_node(node_getter, p)
+                if node:
+                    target_pages.append((p, node))
     else:
         # Fallback to single root retrieval
-        root_data = node_getter(root_path)
+        root_data = _safe_get_node(node_getter, root_path)
         target_pages = [(root_path, root_data)] if root_data else []
 
     counts = {
@@ -74,7 +96,7 @@ def audit_content_integrity(
             if isinstance(hero, dict):
                 hero_ref = hero.get("fileReference")
                 if hero_ref and isinstance(hero_ref, str) and hero_ref.startswith("/content/dam/"):
-                    asset_node = all_nodes.get(hero_ref) if all_nodes is not None else node_getter(hero_ref)
+                    asset_node = all_nodes.get(hero_ref) if all_nodes is not None else _safe_get_node(node_getter, hero_ref)
                     if asset_node is None:
                         counts["broken_dam_references"] += 1
                         unique_broken_assets.add(hero_ref)
@@ -93,7 +115,7 @@ def audit_content_integrity(
             if isinstance(promo, dict):
                 promo_ref = promo.get("fragmentPath")
                 if promo_ref and isinstance(promo_ref, str):
-                    promo_node = all_nodes.get(promo_ref) if all_nodes is not None else node_getter(promo_ref)
+                    promo_node = all_nodes.get(promo_ref) if all_nodes is not None else _safe_get_node(node_getter, promo_ref)
                     if promo_node:
                         p_content = promo_node.get("jcr:content", {})
                         status = p_content.get("campaignStatus", "")
@@ -120,7 +142,7 @@ def audit_content_integrity(
             if isinstance(cf_comp, dict):
                 cf_path = cf_comp.get("fragmentPath")
                 if cf_path and isinstance(cf_path, str):
-                    cf_node = all_nodes.get(cf_path) if all_nodes is not None else node_getter(cf_path)
+                    cf_node = all_nodes.get(cf_path) if all_nodes is not None else _safe_get_node(node_getter, cf_path)
                     if cf_node:
                         cf_data = cf_node.get("jcr:content", {}).get("data", {}).get("master", {})
                         missing_fields = []
@@ -158,7 +180,8 @@ def audit_cross_reference(
     path: str = "/content/novaria/us/en/hotels",
     db_path: Path | str | None = None,
     limit: int = 100,
-    all_nodes: dict[str, Any] | None = None
+    all_nodes: dict[str, Any] | None = None,
+    query_runner: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """
     Reconcile AEM authored properties against Canonical Master Entity Registry (PMS database).
@@ -167,6 +190,7 @@ def audit_cross_reference(
     - Operating status mismatches (Active vs Renovating)
     - Amenity desyncs (marketing claims vs PMS truth)
     - Orphaned legacy pages
+    Works in both simulator mode (all_nodes) and live HTTP mode (query_runner + node_getter).
     """
     limit = min(max(int(limit), 1), 500)
     db_file = Path(db_path) if db_path else CONFIG.property_master_db
@@ -199,6 +223,15 @@ def audit_cross_reference(
             and node.get("jcr:primaryType") == "cq:Page"
             and "hotelId" in node.get("jcr:content", {})
         ]
+    elif query_runner is not None:
+        q_res = query_runner({"path": path, "type": "cq:Page", "p.limit": "500"})
+        authored_pages = []
+        for hit in q_res.get("hits", []):
+            p = hit.get("path") or hit.get("jcr:path")
+            if p:
+                node = _safe_get_node(node_getter, p)
+                if node and "hotelId" in node.get("jcr:content", {}):
+                    authored_pages.append((p, node))
     else:
         authored_pages = []
 
@@ -295,46 +328,74 @@ def audit_cross_reference(
 
 
 def audit_localization_coverage(
-    all_nodes: dict[str, Any],
+    all_nodes: dict[str, Any] | None = None,
     base_locale: str = "us/en",
     target_locales: list[str] | None = None,
     subpath: str = "hotels",
     limit: int = 50,
-    ignore_legacy: bool = True
+    ignore_legacy: bool = True,
+    query_runner: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    root_prefix: str = "/content/novaria",
 ) -> dict[str, Any]:
     """
     Audit multi-region localization coverage comparing canonical base locale to target locales.
+    Works in both simulator mode (all_nodes) and live HTTP mode (query_runner).
     """
     if target_locales is None:
         target_locales = ["gb/en", "fr/fr", "de/de", "es/es", "jp/ja"]
 
-    base_root = f"/content/novaria/{base_locale}/{subpath}"
+    base_root = f"{root_prefix.rstrip('/')}/{base_locale}/{subpath}".rstrip("/")
     canonical_slugs = []
 
-    for path, node in all_nodes.items():
-        if path.startswith(base_root + "/") and node.get("jcr:primaryType") == "cq:Page":
-            # Extract immediate slug
-            rel = path[len(base_root) + 1:]
-            if "/" not in rel:
-                if ignore_legacy and rel.startswith("legacy-hotel-archive-"):
-                    continue
-                canonical_slugs.append(rel)
+    if all_nodes:
+        for path, node in all_nodes.items():
+            if path.startswith(base_root + "/") and node.get("jcr:primaryType") == "cq:Page":
+                rel = path[len(base_root) + 1:]
+                if "/" not in rel:
+                    if ignore_legacy and rel.startswith("legacy-hotel-archive-"):
+                        continue
+                    canonical_slugs.append(rel)
+    elif query_runner is not None:
+        q_res = query_runner({"path": base_root, "type": "cq:Page", "path.flat": "true", "p.limit": "500"})
+        for hit in q_res.get("hits", []):
+            p = hit.get("path") or hit.get("jcr:path") or ""
+            if p.startswith(base_root + "/"):
+                rel = p[len(base_root) + 1:]
+                if "/" not in rel:
+                    if ignore_legacy and rel.startswith("legacy-hotel-archive-"):
+                        continue
+                    canonical_slugs.append(rel)
 
     canonical_slugs = sorted(canonical_slugs)
     total_canonical = len(canonical_slugs)
 
     results = {}
     for target in target_locales:
-        target_root = f"/content/novaria/{target}/{subpath}"
+        target_root = f"{root_prefix.rstrip('/')}/{target}/{subpath}".rstrip("/")
         existing = []
         missing = []
 
-        for slug in canonical_slugs:
-            t_path = f"{target_root}/{slug}"
-            if t_path in all_nodes and all_nodes[t_path].get("jcr:primaryType") == "cq:Page":
-                existing.append(slug)
-            else:
-                missing.append(slug)
+        if all_nodes:
+            for slug in canonical_slugs:
+                t_path = f"{target_root}/{slug}"
+                if t_path in all_nodes and all_nodes[t_path].get("jcr:primaryType") == "cq:Page":
+                    existing.append(slug)
+                else:
+                    missing.append(slug)
+        elif query_runner is not None:
+            q_res = query_runner({"path": target_root, "type": "cq:Page", "path.flat": "true", "p.limit": "500"})
+            target_paths = {
+                (h.get("path") or h.get("jcr:path") or "")
+                for h in q_res.get("hits", [])
+            }
+            for slug in canonical_slugs:
+                t_path = f"{target_root}/{slug}"
+                if t_path in target_paths:
+                    existing.append(slug)
+                else:
+                    missing.append(slug)
+        else:
+            missing = list(canonical_slugs)
 
         coverage_pct = round((len(existing) / total_canonical * 100), 2) if total_canonical else 0.0
         results[target] = {

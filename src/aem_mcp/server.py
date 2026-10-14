@@ -7,6 +7,8 @@ in-memory SQLite dataset materialization, server-side analytics, and Excel/CSV e
 """
 
 import ast
+import builtins
+import concurrent.futures
 import json
 import os
 import re
@@ -499,6 +501,17 @@ def dataset_import(file_path: str, format: str = "auto", name: str = "") -> str:
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
+class _LiveJcrAdapter:
+    """Adapter presenting a JcrEngine-compatible interface over live AEM HTTP endpoints."""
+    def querybuilder(self, params: dict[str, Any]) -> dict[str, Any]:
+        return _get_aem_json("/bin/querybuilder.json", params)
+
+    def get_json(self, path: str, depth: int = 0) -> Any:
+        if depth <= 0 or path.endswith(".json"):
+            return _get_aem_json(path)
+        return _get_aem_json(f"{path}.{depth}.json")
+
+
 # --- Content & Discrepancy Auditing Tools ---
 
 @mcp.tool()
@@ -518,7 +531,8 @@ def aem_audit_content_integrity(
         check_promos=check_promos,
         check_fragments=check_fragments,
         limit=limit,
-        all_nodes=all_nodes
+        all_nodes=all_nodes,
+        query_runner=lambda q: _get_aem_json("/bin/querybuilder.json", q),
     )
     return json.dumps(res, ensure_ascii=False, indent=2)
 
@@ -534,7 +548,8 @@ def aem_audit_cross_reference(
         node_getter=lambda p: _get_aem_json(p),
         path=path,
         limit=limit,
-        all_nodes=all_nodes
+        all_nodes=all_nodes,
+        query_runner=lambda q: _get_aem_json("/bin/querybuilder.json", q),
     )
     return json.dumps(res, ensure_ascii=False, indent=2)
 
@@ -547,13 +562,14 @@ def aem_audit_localization_coverage(
     limit: int = 50
 ) -> str:
     """Audit multi-region localization coverage comparing canonical base locale against target regional sites (e.g. fr/fr, de/de, jp/ja)."""
-    all_nodes = _SIMULATOR.all_nodes if _SIMULATOR is not None else {}
+    all_nodes = _SIMULATOR.all_nodes if _SIMULATOR is not None else None
     res = audit_localization_coverage(
         all_nodes=all_nodes,
         base_locale=base_locale,
         target_locales=target_locales,
         subpath=subpath,
-        limit=limit
+        limit=limit,
+        query_runner=lambda q: _get_aem_json("/bin/querybuilder.json", q),
     )
     return json.dumps(res, ensure_ascii=False, indent=2)
 
@@ -567,12 +583,12 @@ def aem_compile_querybuilder_sql2(query: dict[str, str]) -> str:
         sql2 = compiled.sql2
         provider = "sling-querybuilder"
     except ImportError:
-        p = query.get("path", "/content")
-        t = query.get("type", "nt:base")
+        p = query.get("path", "/content").replace("'", "''")
+        t = query.get("type", "nt:base").replace("]", "")
         clauses = [f"ISDESCENDANTNODE(n, '{p}')"]
         if "property" in query and "property.value" in query:
-            prop = query["property"]
-            val = query["property.value"]
+            prop = query["property"].replace("]", "")
+            val = str(query["property.value"]).replace("'", "''")
             clauses.append(f"n.[{prop}] = '{val}'")
         where = " AND ".join(clauses)
         sql2 = f"SELECT * FROM [{t}] AS n WHERE {where}"
@@ -589,14 +605,18 @@ def aem_compile_querybuilder_sql2(query: dict[str, str]) -> str:
 
 _CODE_BLOCKLIST = {
     "os", "pathlib", "subprocess", "socket", "urllib", "http", "ftplib",
-    "shutil", "tempfile", "ctypes", "multiprocessing", "importlib",
+    "shutil", "tempfile", "ctypes", "multiprocessing", "importlib", "sys",
+    "builtins", "inspect", "gc",
 }
-_CALL_BLOCKLIST = {"open", "exec", "eval", "compile", "input", "__import__"}
+_CALL_BLOCKLIST = {
+    "open", "exec", "eval", "compile", "input", "__import__",
+    "getattr", "setattr", "delattr", "globals", "locals", "vars", "dir", "breakpoint",
+}
 
 
 @mcp.tool()
 def execute_code(code: str, timeout_seconds: int = 120) -> str:
-    """Run bounded in-memory Python calculations over retrieved data. Filesystem and network are strictly blocked."""
+    """Run bounded in-memory Python calculations over retrieved data. Filesystem, network, dunder introspection, and unbounded loops are strictly blocked."""
     tree = ast.parse(code, mode="exec")
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -606,10 +626,34 @@ def execute_code(code: str, timeout_seconds: int = 120) -> str:
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
             if node.func.id in _CALL_BLOCKLIST:
                 raise ValueError(f"Function call '{node.func.id}' is blocked.")
+        if isinstance(node, ast.Attribute) and node.attr.startswith("__"):
+            raise ValueError(f"Access to dunder attribute '{node.attr}' is blocked.")
+        if isinstance(node, ast.Name) and node.id.startswith("__"):
+            raise ValueError(f"Access to dunder identifier '{node.id}' is blocked.")
 
+    safe_builtins = {
+        k: v for k, v in vars(builtins).items()
+        if k not in _CALL_BLOCKLIST and not k.startswith("__")
+    }
     local_scope: dict[str, Any] = {}
-    exec(code, {"__builtins__": {k: v for k, v in __builtins__.items() if k not in _CALL_BLOCKLIST}}, local_scope)
-    
+    bounded_timeout = min(max(int(timeout_seconds), 1), 120)
+    exec_error: list[BaseException] = []
+
+    def _run_sandbox() -> None:
+        try:
+            exec(code, {"__builtins__": safe_builtins}, local_scope)
+        except BaseException as exc:
+            exec_error.append(exc)
+
+    import threading
+    worker = threading.Thread(target=_run_sandbox, daemon=True)
+    worker.start()
+    worker.join(timeout=bounded_timeout)
+    if worker.is_alive():
+        raise TimeoutError(f"execute_code timed out after {bounded_timeout} seconds.")
+    if exec_error:
+        raise exec_error[0]
+
     # Strip complex non-serializable objects
     sanitized = {k: v for k, v in local_scope.items() if isinstance(v, (int, float, str, bool, list, dict, type(None)))}
     return json.dumps(sanitized, ensure_ascii=False, indent=2)
@@ -644,7 +688,7 @@ def aem_lint_query_indexing(query: dict[str, Any]) -> str:
     """
     Lint an AEM QueryBuilder query for Apache Jackrabbit Oak indexing performance.
     Detects unindexed property traversals, predicts Oak query plans, and generates
-    production-ready /oak:index definitions (JSON & FileVault XML) to prevent query timeouts.
+    production-ready /oak:index definitions (JSON, FileVault XML & OSGi Repoinit) to prevent query timeouts.
     """
     search_path = query.get("path", "/content")
     node_type = query.get("type", "nt:base")
@@ -696,7 +740,7 @@ def aem_lint_query_indexing(query: dict[str, Any]) -> str:
     # Build recommended index definitions if traversal detected
     remediations = {}
     if unindexed:
-        first_prop = unindexed[0].replace("jcr:content/", "").replace("/", "_")
+        first_prop = unindexed[0].replace("jcr:content/", "").replace("/", "_").replace(":", "_")
         idx_name = f"{first_prop}Index"
         
         # Property index
@@ -738,6 +782,20 @@ def aem_lint_query_indexing(query: dict[str, Any]) -> str:
             }
         }
 
+        quoted_props = ", ".join(f'"{p}"' for p in unindexed)
+        repoinit_lines = [
+            f"create path /oak:index/{idx_name}(oak:QueryIndexDefinition)",
+            f"set properties on /oak:index/{idx_name}",
+            '  set type to "property"',
+            f"  set propertyNames{{Name}} to {quoted_props}",
+        ]
+        if node_type != "nt:base":
+            repoinit_lines.append(f'  set declaringNodeTypes{{Name}} to "{node_type}"')
+        repoinit_lines.extend([
+            "  set reindex{Boolean} to true",
+            "end",
+        ])
+
         remediations["property_index"] = {
             "path": f"/oak:index/{idx_name}",
             "json": prop_idx_json,
@@ -748,7 +806,8 @@ def aem_lint_query_indexing(query: dict[str, Any]) -> str:
                 f'    type="property"\n'
                 f'    reindex="{{Boolean}}true"\n'
                 f'    propertyNames="[{",".join(unindexed)}]"/>'
-            )
+            ),
+            "repoinit": "\n".join(repoinit_lines),
         }
         remediations["lucene_index"] = {
             "path": f"/oak:index/{idx_name}Lucene",
@@ -853,12 +912,13 @@ def aem_audit_domain_rules(domain: str = "", limit: int = 100) -> str:
     """
     Executes declarative domain governance rules for the active (or specified) domain,
     reconciling AEM authored content against the canonical master data source (SQLite, CSV, JSON).
+    Works in both offline simulator mode and live AEM (onprem / cloud) mode.
     """
     if domain and domain.lower().strip() != DOMAIN_MANAGER.active_domain_id:
         domain_switch(domain)
 
-    assert _SIMULATOR is not None
-    findings = DOMAIN_MANAGER.evaluate_audit_rules(_SIMULATOR, limit=limit)
+    engine = _SIMULATOR if _SIMULATOR is not None else _LiveJcrAdapter()
+    findings = DOMAIN_MANAGER.evaluate_audit_rules(engine, limit=limit)
     return json.dumps(findings, indent=2)
 
 
