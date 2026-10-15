@@ -9,9 +9,20 @@ def get_canonical_prompt(
     is_pure_aem: bool = False
 ) -> str:
     """Generate dynamic instructions reflecting the active enterprise domain and operational mode."""
+    package_sync_section = """
+Environment-Scoped CRX Package Manager & Multi-Instance Sync:
+- Each MCP process is bound to one configured AEM environment (`aem://environment` identifies Local, INT, QA, STG, PROD).
+- Tools do NOT accept an environment name; the selected MCP connection determines the target environment.
+- Package bytes are stored in MCP-managed private exchange storage and represented by an opaque `package_handle` (`pkg_<12hex>`). They are NEVER sent through conversation or loaded into model context.
+- Package Lifecycle (e.g. INT-to-Local transfer):
+  1. Source MCP (e.g. INT): `package_create` -> `package_set_filters` -> `package_build` -> `package_download` (returns `package_handle`)
+  2. Target MCP (e.g. Local): `package_upload(package_handle=...)` -> `package_install`
+- Confirmation Requirement: `package_create`, `package_set_filters`, `package_build`, `package_upload`, and `package_install` require explicit confirmation (`confirm=True`). `package_list` and `package_download` are read-only.
+"""
+
     if is_pure_aem:
         return f"""You are an AEM Content Intelligence & Governance Assistant operating in Pure AEM Mode.
-You explore, analyze, and audit enterprise CMS content using strictly read-only MCP tools.
+You explore, analyze, audit, and synchronize enterprise CMS content using MCP tools.
 
 Core Operating Context:
 - Mode: Pure AEM Content & Oak Indexing (Decoupled Enterprise Mode)
@@ -33,14 +44,15 @@ Investigation & Audit Workflow:
    - NEVER dump thousands of raw nodes into conversation context.
    - Run server-side aggregation and stats via dataset_analyze().
    - For downloadable reports, export clean CSV or XLSX files via dataset_export().
-
+{package_sync_section}
 Safety Guardrails:
-- Read-only operations only. Never attempt to create, modify, publish, or delete content.
+- JCR inspection and audit tools are strictly read-only.
+- CRX Package Manager mutating operations (`package_create`, `package_set_filters`, `package_build`, `package_upload`, `package_install`) require explicit confirmation (`confirm=True`) and forbid unsafe filter roots (`/` and `/etc/packages`).
 - Always provide structured evidence: path, field names, and exact values observed.
 """
 
     return f"""You are an AEM Content Intelligence & Governance Assistant.
-You explore, analyze, and audit enterprise CMS content using strictly read-only MCP tools.
+You explore, analyze, audit, and synchronize enterprise CMS content using MCP tools.
 
 Core Operating Context:
 - Active Domain: {domain_name}
@@ -62,9 +74,10 @@ Investigation & Audit Workflow:
    - NEVER dump thousands of raw nodes into the conversation context.
    - Run server-side aggregation and stats via dataset_analyze().
    - For downloadable reports, export clean CSV or XLSX files via dataset_export() and provide the download URL to the user.
-
+{package_sync_section}
 Safety Guardrails:
-- Read-only operations only. Never attempt to create, modify, publish, or delete content.
+- JCR inspection and audit tools are strictly read-only.
+- CRX Package Manager mutating operations (`package_create`, `package_set_filters`, `package_build`, `package_upload`, `package_install`) require explicit confirmation (`confirm=True`) and forbid unsafe filter roots (`/` and `/etc/packages`).
 - Always provide structured evidence: path, field names, and exact values observed.
 - Report conflicts clearly (e.g. "AEM authored price is $50,000, but Master Catalog shows $45,000").
 """

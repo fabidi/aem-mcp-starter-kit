@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AEM MCP Configurator — Instance, Role &amp; Environment Manager</title>
+  <style>
+    :root {
+      --bg-app: #0b0f17;
+      --bg-panel: #111827;
+      --bg-card: #1a2234;
+      --bg-card-hover: #212c42;
+      --bg-input: #0f1523;
+      --border: #263147;
+      --border-focus: #3b82f6;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --purple: #8b5cf6;
+      --teal: #14b8a6;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-app);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: 13.5px;
+      line-height: 1.45;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top Header */
+    header {
+      height: 56px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      flex-shrink: 0;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #ef4444, #3b82f6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 14px;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+    .brand-title {
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.2px;
+    }
+    .brand-sub {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-left: 8px;
+      padding-left: 8px;
+      border-left: 1px solid var(--border);
+    }
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-main);
+      transition: all 0.15s ease;
+    }
+    .btn:hover { background: var(--bg-card-hover); border-color: #3b4968; }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.12);
+      border-color: rgba(239, 68, 68, 0.35);
+      color: #f87171;
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.22); }
+    .btn-sm { padding: 4px 9px; font-size: 11.5px; }
+
+    /* Main 3-Column Layout */
+    .workspace {
+      display: grid;
+      grid-template-columns: 300px 1fr 390px;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* Left Sidebar */
+    .sidebar {
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .nav-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      border-bottom: 1px solid var(--border);
+      background: #0d1320;
+    }
+    .nav-tab {
+      padding: 11px 12px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 12.5px;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+    }
+    .nav-tab.active {
+      color: var(--text-main);
+      border-bottom-color: var(--accent);
+      background: var(--bg-panel);
+    }
+    .sidebar-header {
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header h3 {
+      font-size: 11.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: var(--text-muted);
+    }
+    .sidebar-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+    .list-item {
+      padding: 10px 12px;
+      border-radius: 7px;
+      background: var(--bg-card);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .list-item:hover { background: var(--bg-card-hover); }
+    .list-item.active {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.12);
+    }
+    .list-item-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .list-item-title {
+      font-weight: 600;
+      font-size: 13px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .list-item-sub {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text-muted);
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+    }
+
+    /* Environment Tier Badges */
+    .env-badge {
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+      letter-spacing: 0.4px;
+      flex-shrink: 0;
+    }
+    .env-dev { background: rgba(16, 185, 129, 0.16); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
+    .env-int { background: rgba(20, 184, 166, 0.16); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.35); }
+    .env-qa  { background: rgba(59, 130, 246, 0.16); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); }
+    .env-stg { background: rgba(139, 92, 246, 0.16); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.35); }
+    .env-prod { background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+
+    /* Center Editor */
+    .main-editor {
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      padding: 20px 24px;
+      gap: 18px;
+    }
+    .card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 14.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .form-group label {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    input[type="text"], select {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 7px 10px;
+      border-radius: 6px;
+      font-size: 12.5px;
+      font-family: var(--font-sans);
+      outline: none;
+    }
+    input[type="text"]:focus, select:focus {
+      border-color: var(--border-focus);
+    }
+
+    /* Telemetry Strip */
+    .stats-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .stat-box {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 14px;
+    }
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+    }
+    .stat-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Tool Categories & Matrix */
+    .category-block {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 14px;
+    }
+    .category-header {
+      padding: 12px 16px;
+      background: #141c2e;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .category-info h4 {
+      font-size: 13.5px;
+      font-weight: 700;
+    }
+    .category-info p {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 10px;
+      padding: 14px;
+    }
+    .tool-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 13px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+    .tool-card.enabled {
+      border-color: rgba(59, 130, 246, 0.55);
+      background: rgba(59, 130, 246, 0.08);
+    }
+    .tool-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .tool-name {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 12.5px;
+      color: #93c5fd;
+    }
+    .tool-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+    .tool-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      padding-top: 4px;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+    .tool-badge {
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text-muted);
+    }
+    .tool-badge.sandbox-exec {
+      background: rgba(245, 158, 11, 0.16);
+      color: #fbbf24;
+    }
+    .tool-badge.confirm-gate {
+      background: rgba(168, 85, 247, 0.18);
+      color: #c084fc;
+    }
+
+    /* Right Config Output Panel */
+    .export-panel {
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .export-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .export-header h3 {
+      font-size: 13.5px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .export-header p {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+    .export-controls {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: #0d1320;
+    }
+    .code-container {
+      flex: 1;
+      overflow: auto;
+      padding: 14px 16px;
+      background: #080b11;
+      font-family: var(--font-mono);
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: #d1d5db;
+      white-space: pre;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      width: 540px;
+      max-width: 94vw;
+      padding: 20px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    }
+    .modal h3 { font-size: 16px; font-weight: 700; }
+    .env-checkboxes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .env-check-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .toast {
+      position: fixed;
+      bottom: 18px;
+      right: 18px;
+      background: #10b981;
+      color: #052e16;
+      font-weight: 700;
+      padding: 9px 16px;
+      border-radius: 8px;
+      display: none;
+      z-index: 100;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-logo">MCP</div>
+      <div>
+        <span class="brand-title">AEM Content Intelligence — MCP Configurator</span>
+        <span class="brand-sub">Multi-Instance Role &amp; Environment Scoper (DEV / INT / QA / STG / PROD)</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn" onclick="openBatchModal()">⚡ Batch Generate Across Environments</button>
+      <button class="btn btn-primary" onclick="openNewInstanceModal()">+ Create MCP Instance</button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <!-- Left Sidebar -->
+    <aside class="sidebar">
+      <div class="nav-tabs">
+        <div id="tab-instances" class="nav-tab active" onclick="switchSidebarTab('instances')">MCP Instances</div>
+        <div id="tab-environments" class="nav-tab" onclick="switchSidebarTab('environments')">Environments (5+)</div>
+      </div>
+
+      <div id="sidebar-instances-view" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="sidebar-header">
+          <h3>Configured Instances</h3>
+          <button class="btn btn-sm" onclick="openNewInstanceModal()">+ New</button>
+        </div>
+        <div id="instance-list" class="sidebar-list"></div>
+      </div>
+
+      <div id="sidebar-environments-view" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+        <div class="sidebar-header">
+          <h3>Environment Tiers</h3>
+          <button class="btn btn-sm" onclick="createNewEnvironment()">+ Add Env</button>
+        </div>
+        <div id="environment-list" class="sidebar-list"></div>
+      </div>
+    </aside>
+
+    <!-- Center Workspace -->
+    <main class="main-editor">
+      <!-- Instance Editor View -->
+      <div id="editor-instance-view">
+        <div class="card" style="margin-bottom: 16px;">
+          <div class="card-header">
+            <div class="card-title">
+              <span id="active-inst-title">Instance Configuration</span>
+              <span id="active-inst-env-badge" class="env-badge env-dev">DEV</span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm" onclick="applyPresetToCurrent('blank')">Reset to Scratch (0 Tools)</button>
+              <button class="btn btn-sm" onclick="duplicateCurrentInstance()">Clone to Another Env</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteCurrentInstance()">Delete</button>
+              <button class="btn btn-sm btn-primary" onclick="saveCurrentInstance()">💾 Save Instance</button>
+            </div>
+          </div>
+
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Instance ID (MCP Server Key)</label>
+              <input type="text" id="inst-id" oninput="onInstanceFieldChange()" />
+            </div>
+            <div class="form-group">
+              <label>Display Name</label>
+              <input type="text" id="inst-name" oninput="onInstanceFieldChange()" />
+            </div>
+            <div class="form-group">
+              <label>Target Environment Level</label>
+              <select id="inst-env" onchange="onInstanceFieldChange()"></select>
+            </div>
+            <div class="form-group">
+              <label>Base Role Preset (or Custom)</label>
+              <select id="inst-preset" onchange="onPresetChange()"></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Telemetry Strip -->
+        <div class="stats-strip" style="margin-bottom: 16px;">
+          <div class="stat-box">
+            <div class="stat-label">Authorized Toolset</div>
+            <div class="stat-value" id="stat-tools-count">17 / 28</div>
+            <div class="stat-sub" id="stat-tools-pct">Scoped for active role</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Est. Context Overhead</div>
+            <div class="stat-value" id="stat-tokens">~1,920 tok</div>
+            <div class="stat-sub" id="stat-tokens-saved">38% token reduction vs Full</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Target AEM Endpoint</div>
+            <div class="stat-value" id="stat-env-mode" style="font-size:14px; overflow:hidden; text-overflow:ellipsis;">mock</div>
+            <div class="stat-sub" id="stat-env-url">http://localhost:4502</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Code Sandbox Status</div>
+            <div class="stat-value" id="stat-sandbox">Authorized</div>
+            <div class="stat-sub" id="stat-sandbox-sub">AST + timeout guarded</div>
+          </div>
+        </div>
+
+        <!-- Granular Tool Matrix -->
+        <div id="categories-container"></div>
+      </div>
+
+      <!-- Environment Editor View -->
+      <div id="editor-environment-view" style="display:none;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <span>Environment Definition</span>
+              <span id="env-editor-badge" class="env-badge env-dev">DEV</span>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-sm btn-danger" onclick="deleteCurrentEnvironment()">Delete Env</button>
+              <button class="btn btn-sm btn-primary" onclick="saveCurrentEnvironment()">💾 Save Environment</button>
+            </div>
+          </div>
+          <div class="form-grid" style="grid-template-columns: repeat(2, 1fr);">
+            <div class="form-group">
+              <label>Environment ID (e.g. dev, int, qa, stg, prod)</label>
+              <input type="text" id="env-id" />
+            </div>
+            <div class="form-group">
+              <label>Display Name</label>
+              <input type="text" id="env-name" />
+            </div>
+            <div class="form-group">
+              <label>Connection Mode</label>
+              <select id="env-mode">
+                <option value="mock">mock (Offline JCR Simulator)</option>
+                <option value="onprem">onprem (AEM 6.5 / Basic Auth)</option>
+                <option value="cloud">cloud (AEMaaCS / Adobe IMS OAuth)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>AEM Author Base URL</label>
+              <input type="text" id="env-url" placeholder="https://author-pXXXX-eYYYY.adobeaemcloud.com" />
+            </div>
+            <div class="form-group">
+              <label>Default Domain Profile</label>
+              <select id="env-domain">
+                <option value="hospitality">hospitality (Novaria Hotels SQLite)</option>
+                <option value="automotive">automotive (Velocity Motors CSV)</option>
+                <option value="retail">retail (Maison Lumiere JSON)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Reference Entity Registry Facade</label>
+              <select id="env-registry">
+                <option value="true">Enabled (Include Demo Registry Facade)</option>
+                <option value="false">Disabled (Pure AEM Mode)</option>
+              </select>
+            </div>
+            <div class="form-group" style="grid-column: span 2;">
+              <label>Description</label>
+              <input type="text" id="env-desc" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right Export Panel -->
+    <aside class="export-panel">
+      <div class="export-header">
+        <h3>MCP Client Configuration</h3>
+        <p>Paste into <code>mcp_config.json</code> or <code>claude_desktop_config.json</code></p>
+      </div>
+      <div class="export-controls">
+        <div class="form-group">
+          <label>Export Scope</label>
+          <select id="export-scope" onchange="renderExportConfig()">
+            <option value="current">Selected Instance Only</option>
+            <option value="same_role">All Instances of Current Role (DEV..PROD)</option>
+            <option value="all">All Configured Instances</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" style="flex:1; justify-content:center;" onclick="copyExportJson()">📋 Copy mcpServers JSON</button>
+          <button class="btn" onclick="copyCliCommand()">Copy CLI Cmd</button>
+        </div>
+      </div>
+      <div id="export-code" class="code-container"></div>
+    </aside>
+  </div>
+
+  <!-- Modal: Create New Instance (From Scratch or Preset) -->
+  <div id="modal-new-instance" class="modal-backdrop">
+    <div class="modal">
+      <h3>Create New MCP Instance</h3>
+      <p style="color:var(--text-muted); font-size:12.5px;">
+        Start from scratch (0 tools) or base your instance on a role preset, then bind it to an environment tier.
+      </p>
+      <div class="form-group">
+        <label>1. Choose Starting Template</label>
+        <select id="new-inst-preset" onchange="updateNewInstanceDefaults()"></select>
+      </div>
+      <div class="form-group">
+        <label>2. Target Environment Level</label>
+        <select id="new-inst-env" onchange="updateNewInstanceDefaults()"></select>
+      </div>
+      <div class="form-group">
+        <label>3. Instance ID</label>
+        <input type="text" id="new-inst-id" placeholder="e.g. aem-dev-qa or aem-custom-prod" />
+      </div>
+      <div class="form-group">
+        <label>4. Display Name</label>
+        <input type="text" id="new-inst-name" placeholder="e.g. AEM Developer (QA)" />
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:6px;">
+        <button class="btn" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmCreateInstance()">Create Instance</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Batch Generate Role Across Environments -->
+  <div id="modal-batch" class="modal-backdrop">
+    <div class="modal">
+      <h3>⚡ Batch Generate Role Across Environments</h3>
+      <p style="color:var(--text-muted); font-size:12.5px;">
+        Automatically create independent MCP instances for a role across multiple environment tiers (e.g. <code>aem-dev-dev</code> through <code>aem-dev-prod</code>).
+      </p>
+      <div class="form-group">
+        <label>Role Preset</label>
+        <select id="batch-preset" onchange="onBatchPresetChange()"></select>
+      </div>
+      <div class="form-group">
+        <label>Instance ID Prefix</label>
+        <input type="text" id="batch-prefix" value="aem-dev" />
+      </div>
+      <div class="form-group">
+        <label>Display Name Prefix</label>
+        <input type="text" id="batch-name-prefix" value="AEM Developer" />
+      </div>
+      <div class="form-group">
+        <label>Target Environments to Generate</label>
+        <div id="batch-env-checks" class="env-checkboxes"></div>
+      </div>
+      <label style="display:flex; align-items:center; gap:8px; font-size:12.5px; cursor:pointer;">
+        <input type="checkbox" id="batch-prod-safe" checked />
+        Automatically strip mutating tools (<code>execute_code</code>, <code>package_create/build/upload/install</code>) on <strong>PROD</strong> instance
+      </label>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:6px;">
+        <button class="btn" onclick="closeModals()">Cancel</button>
+        <button class="btn btn-primary" onclick="confirmBatchGenerate()">Generate Instances</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast">Saved!</div>
+
+  <script>
+    let STATE = null;
+    let activeInstanceId = null;
+    let activeEnvId = null;
+    let sidebarMode = 'instances';
+
+    async function loadState() {
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          STATE = await res.json();
+        }
+      } catch (e) {
+        console.warn('Running in standalone preview mode.');
+      }
+      if (!STATE) return;
+      const instKeys = Object.keys(STATE.instances);
+      if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
+        activeInstanceId = instKeys[0] || null;
+      }
+      const envKeys = Object.keys(STATE.environments);
+      if (!activeEnvId || !STATE.environments[activeEnvId]) {
+        activeEnvId = envKeys[0] || 'dev';
+      }
+      renderAll();
+    }
+
+    function envBadgeClass(envId) {
+      const e = (envId || 'dev').toLowerCase();
+      if (e.includes('prod')) return 'env-badge env-prod';
+      if (e.includes('stg') || e.includes('stage')) return 'env-badge env-stg';
+      if (e.includes('qa')) return 'env-badge env-qa';
+      if (e.includes('int')) return 'env-badge env-int';
+      return 'env-badge env-dev';
+    }
+
+    function switchSidebarTab(mode) {
+      sidebarMode = mode;
+      document.getElementById('tab-instances').classList.toggle('active', mode === 'instances');
+      document.getElementById('tab-environments').classList.toggle('active', mode === 'environments');
+      document.getElementById('sidebar-instances-view').style.display = mode === 'instances' ? 'flex' : 'none';
+      document.getElementById('sidebar-environments-view').style.display = mode === 'environments' ? 'flex' : 'none';
+      document.getElementById('editor-instance-view').style.display = mode === 'instances' ? 'block' : 'none';
+      document.getElementById('editor-environment-view').style.display = mode === 'environments' ? 'block' : 'none';
+      renderAll();
+    }
+
+    function renderAll() {
+      renderSidebarInstances();
+      renderSidebarEnvironments();
+      populateSelects();
+      if (sidebarMode === 'instances') {
+        renderInstanceEditor();
+      } else {
+        renderEnvironmentEditor();
+      }
+      renderExportConfig();
+    }
+
+    function renderSidebarInstances() {
+      const container = document.getElementById('instance-list');
+      container.innerHTML = '';
+      const totalTools = STATE.tools.length;
+      Object.values(STATE.instances).forEach(inst => {
+        const div = document.createElement('div');
+        div.className = 'list-item' + (inst.id === activeInstanceId ? ' active' : '');
+        div.onclick = () => { activeInstanceId = inst.id; renderAll(); };
+        const count = (inst.allowed_tools || []).length;
+        div.innerHTML = `
+          <div class="list-item-top">
+            <span class="list-item-title">${inst.name}</span>
+            <span class="${envBadgeClass(inst.environment)}">${inst.environment}</span>
+          </div>
+          <div class="list-item-sub">
+            <span>${inst.id}</span>
+            <span>${count}/${totalTools} tools</span>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function renderSidebarEnvironments() {
+      const container = document.getElementById('environment-list');
+      container.innerHTML = '';
+      Object.values(STATE.environments).forEach(env => {
+        const div = document.createElement('div');
+        div.className = 'list-item' + (env.id === activeEnvId ? ' active' : '');
+        div.onclick = () => { activeEnvId = env.id; renderAll(); };
+        div.innerHTML = `
+          <div class="list-item-top">
+            <span class="list-item-title">${env.name}</span>
+            <span class="${envBadgeClass(env.id)}">${env.id}</span>
+          </div>
+          <div class="list-item-sub">
+            <span>${env.mode}</span>
+            <span style="max-width:170px; overflow:hidden; text-overflow:ellipsis;">${env.aem_url}</span>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function populateSelects() {
+      const envSelects = [document.getElementById('inst-env'), document.getElementById('new-inst-env')];
+      envSelects.forEach(sel => {
+        if (!sel) return;
+        const val = sel.value;
+        sel.innerHTML = '';
+        Object.values(STATE.environments).forEach(env => {
+          const opt = document.createElement('option');
+          opt.value = env.id;
+          opt.textContent = `${env.id.toUpperCase()} — ${env.name} (${env.mode})`;
+          sel.appendChild(opt);
+        });
+        if (val) sel.value = val;
+      });
+
+      const presetSelects = [
+        document.getElementById('inst-preset'),
+        document.getElementById('new-inst-preset'),
+        document.getElementById('batch-preset')
+      ];
+      presetSelects.forEach(sel => {
+        if (!sel) return;
+        const val = sel.value;
+        sel.innerHTML = '';
+        Object.values(STATE.presets).forEach(p => {
+          const opt = document.createElement('option');
+          opt.value = p.id;
+          opt.textContent = `${p.name} (${p.tools.length} tools)`;
+          sel.appendChild(opt);
+        });
+        if (val) sel.value = val;
+      });
+    }
+
+    function renderInstanceEditor() {
+      const inst = STATE.instances[activeInstanceId];
+      if (!inst) return;
+
+      document.getElementById('active-inst-title').textContent = inst.name;
+      const badge = document.getElementById('active-inst-env-badge');
+      badge.className = envBadgeClass(inst.environment);
+      badge.textContent = inst.environment.toUpperCase();
+
+      document.getElementById('inst-id').value = inst.id;
+      document.getElementById('inst-name').value = inst.name;
+      document.getElementById('inst-env').value = inst.environment;
+      document.getElementById('inst-preset').value = inst.role_preset || 'blank';
+
+      const allowedSet = new Set(inst.allowed_tools || []);
+      const totalTools = STATE.tools.length;
+      const fullTokens = STATE.tools.reduce((acc, t) => acc + t.tokens, 0);
+      const activeTokens = STATE.tools.filter(t => allowedSet.has(t.name)).reduce((acc, t) => acc + t.tokens, 0);
+      const savedPct = fullTokens ? Math.round((1 - activeTokens / fullTokens) * 100) : 0;
+
+      document.getElementById('stat-tools-count').textContent = `${allowedSet.size} / ${totalTools}`;
+      document.getElementById('stat-tools-pct').textContent = `Preset: ${inst.role_preset || 'custom'}`;
+      document.getElementById('stat-tokens').textContent = `~${activeTokens.toLocaleString()} tok`;
+      document.getElementById('stat-tokens-saved').textContent = savedPct > 0 ? `${savedPct}% context reduction vs Full` : `Full tool schema loaded`;
+
+      const envObj = STATE.environments[inst.environment] || STATE.environments.dev;
+      document.getElementById('stat-env-mode').textContent = `${envObj.id.toUpperCase()} (${envObj.mode})`;
+      document.getElementById('stat-env-url').textContent = envObj.aem_url;
+
+      const hasSandbox = allowedSet.has('execute_code');
+      const sbEl = document.getElementById('stat-sandbox');
+      sbEl.textContent = hasSandbox ? 'Authorized' : 'Disabled';
+      sbEl.style.color = hasSandbox ? '#fbbf24' : '#34d399';
+      document.getElementById('stat-sandbox-sub').textContent = hasSandbox ? 'AST + timeout guarded' : 'Strict read-only mode';
+
+      // Render categories
+      const catContainer = document.getElementById('categories-container');
+      catContainer.innerHTML = '';
+
+      STATE.categories.forEach(cat => {
+        const catTools = STATE.tools.filter(t => t.category === cat.id);
+        const enabledInCat = catTools.filter(t => allowedSet.has(t.name)).length;
+        const allEnabled = enabledInCat === catTools.length;
+
+        const block = document.createElement('div');
+        block.className = 'category-block';
+        block.innerHTML = `
+          <div class="category-header">
+            <div class="category-info">
+              <h4>${cat.name} <span style="color:var(--text-muted); font-weight:500; font-size:12px;">(${enabledInCat}/${catTools.length})</span></h4>
+              <p>${cat.description}</p>
+            </div>
+            <button class="btn btn-sm" onclick="toggleCategory('${cat.id}', ${!allEnabled})">
+              ${allEnabled ? 'Disable Category' : 'Enable Category'}
+            </button>
+          </div>
+          <div class="tools-grid" id="cat-grid-${cat.id}"></div>
+        `;
+        catContainer.appendChild(block);
+
+        const grid = block.querySelector(`#cat-grid-${cat.id}`);
+        catTools.forEach(tool => {
+          const isOn = allowedSet.has(tool.name);
+          const card = document.createElement('div');
+          card.className = 'tool-card' + (isOn ? ' enabled' : '');
+          card.onclick = () => toggleTool(tool.name);
+          card.innerHTML = `
+            <div>
+              <div class="tool-card-top">
+                <span class="tool-name">${tool.name}</span>
+                <input type="checkbox" ${isOn ? 'checked' : ''} onclick="event.stopPropagation(); toggleTool('${tool.name}');" />
+              </div>
+              <div class="tool-desc" style="margin-top:5px;">${tool.description}</div>
+            </div>
+            <div class="tool-meta">
+              <span class="tool-badge ${tool.badge}">${tool.badge}</span>
+              <span>~${tool.tokens} tokens</span>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      });
+    }
+
+    function toggleTool(toolName) {
+      const inst = STATE.instances[activeInstanceId];
+      if (!inst) return;
+      const set = new Set(inst.allowed_tools || []);
+      if (set.has(toolName)) set.delete(toolName);
+      else set.add(toolName);
+      inst.allowed_tools = STATE.tools.map(t => t.name).filter(n => set.has(n));
+      renderAll();
+    }
+
+    function toggleCategory(catId, enable) {
+      const inst = STATE.instances[activeInstanceId];
+      if (!inst) return;
+      const set = new Set(inst.allowed_tools || []);
+      STATE.tools.filter(t => t.category === catId).forEach(t => {
+        if (enable) set.add(t.name);
+        else set.delete(t.name);
+      });
+      inst.allowed_tools = STATE.tools.map(t => t.name).filter(n => set.has(n));
+      renderAll();
+    }
+
+    function onInstanceFieldChange() {
+      const inst = STATE.instances[activeInstanceId];
+      if (!inst) return;
+      inst.name = document.getElementById('inst-name').value;
+      inst.environment = document.getElementById('inst-env').value;
+      renderSidebarInstances();
+      renderInstanceEditor();
+      renderExportConfig();
+    }
+
+    function onPresetChange() {
+      const presetId = document.getElementById('inst-preset').value;
+      applyPresetToCurrent(presetId);
+    }
+
+    function applyPresetToCurrent(presetId) {
+      const inst = STATE.instances[activeInstanceId];
+      if (!inst) return;
+      const preset = STATE.presets[presetId];
+      if (!preset) return;
+      inst.role_preset = presetId;
+      inst.allowed_tools = [...preset.tools];
+      renderAll();
+    }
+
+    async function saveCurrentInstance() {
+      const inst = STATE.instances[activeInstanceId];
+      if (!inst) return;
+      const newId = document.getElementById('inst-id').value.trim().toLowerCase();
+      const payload = {
+        ...inst,
+        id: newId,
+        name: document.getElementById('inst-name').value.trim(),
+        environment: document.getElementById('inst-env').value,
+        role_preset: document.getElementById('inst-preset').value,
+      };
+      try {
+        const res = await fetch('/api/instances', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          STATE = data.state;
+          activeInstanceId = data.instance.id;
+          renderAll();
+          showToast(`Saved instance '${activeInstanceId}'`);
+        } else {
+          alert(data.error || 'Failed saving instance');
+        }
+      } catch (e) {
+        STATE.instances[newId] = payload;
+        activeInstanceId = newId;
+        renderAll();
+        showToast('Updated in preview state');
+      }
+    }
+
+    async function deleteCurrentInstance() {
+      if (!activeInstanceId) return;
+      try {
+        const res = await fetch('/api/instances/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: activeInstanceId })
+        });
+        const data = await res.json();
+        if (data.state) STATE = data.state;
+      } catch (e) {
+        delete STATE.instances[activeInstanceId];
+      }
+      activeInstanceId = Object.keys(STATE.instances)[0] || null;
+      renderAll();
+      showToast('Instance deleted');
+    }
+
+    function renderEnvironmentEditor() {
+      const env = STATE.environments[activeEnvId];
+      if (!env) return;
+      const badge = document.getElementById('env-editor-badge');
+      badge.className = envBadgeClass(env.id);
+      badge.textContent = env.id.toUpperCase();
+
+      document.getElementById('env-id').value = env.id;
+      document.getElementById('env-name').value = env.name;
+      document.getElementById('env-mode').value = env.mode;
+      document.getElementById('env-url').value = env.aem_url;
+      document.getElementById('env-domain').value = env.default_domain || 'hospitality';
+      document.getElementById('env-registry').value = env.enable_registry ? 'true' : 'false';
+      document.getElementById('env-desc').value = env.description || '';
+    }
+
+    function createNewEnvironment() {
+      const id = 'uat';
+      STATE.environments[id] = {
+        id: 'uat',
+        name: 'UAT (User Acceptance Testing)',
+        tier: 'uat',
+        mode: 'cloud',
+        aem_url: 'https://author-p10001-e20004.adobeaemcloud.com',
+        auth_type: 'ims',
+        default_domain: 'hospitality',
+        enable_registry: false,
+        description: 'User acceptance testing environment.'
+      };
+      activeEnvId = id;
+      switchSidebarTab('environments');
+    }
+
+    async function saveCurrentEnvironment() {
+      const payload = {
+        id: document.getElementById('env-id').value.trim().toLowerCase(),
+        name: document.getElementById('env-name').value.trim(),
+        mode: document.getElementById('env-mode').value,
+        aem_url: document.getElementById('env-url').value.trim(),
+        default_domain: document.getElementById('env-domain').value,
+        enable_registry: document.getElementById('env-registry').value === 'true',
+        description: document.getElementById('env-desc').value.trim(),
+      };
+      try {
+        const res = await fetch('/api/environments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          STATE = data.state;
+          activeEnvId = data.environment.id;
+          renderAll();
+          showToast(`Saved environment '${activeEnvId.toUpperCase()}'`);
+        } else {
+          alert(data.error || 'Failed saving environment');
+        }
+      } catch (e) {
+        STATE.environments[payload.id] = payload;
+        activeEnvId = payload.id;
+        renderAll();
+        showToast('Saved environment in preview');
+      }
+    }
+
+    async function deleteCurrentEnvironment() {
+      if (!activeEnvId) return;
+      try {
+        const res = await fetch('/api/environments/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: activeEnvId })
+        });
+        const data = await res.json();
+        if (data.state) STATE = data.state;
+      } catch (e) {
+        delete STATE.environments[activeEnvId];
+      }
+      activeEnvId = Object.keys(STATE.environments)[0] || 'dev';
+      renderAll();
+      showToast('Environment deleted');
+    }
+
+    function buildClientConfigObject() {
+      const scope = document.getElementById('export-scope').value;
+      const currentInst = STATE.instances[activeInstanceId];
+      let targetInstances = [];
+
+      if (scope === 'current' && currentInst) {
+        targetInstances = [currentInst];
+      } else if (scope === 'same_role' && currentInst) {
+        targetInstances = Object.values(STATE.instances).filter(i => i.role_preset === currentInst.role_preset);
+      } else {
+        targetInstances = Object.values(STATE.instances);
+      }
+
+      const mcpServers = {};
+      targetInstances.forEach(inst => {
+        const envCfg = STATE.environments[inst.environment] || STATE.environments.dev;
+        const envVars = {
+          AEM_MCP_INSTANCE: inst.id,
+          AEM_MCP_ENV: inst.environment,
+          AEM_MODE: envCfg.mode,
+          AEM_URL: envCfg.aem_url,
+          AEM_DOMAIN: envCfg.default_domain || 'hospitality',
+          AEM_MCP_ENABLE_REGISTRY: envCfg.enable_registry ? 'true' : 'false',
+          AEM_MCP_ALLOWED_TOOLS: (inst.allowed_tools || []).join(',')
+        };
+        if (envCfg.mode === 'onprem') {
+          envVars.AEM_USERNAME = 'admin';
+          envVars.AEM_PASSWORD = '<YOUR_AEM_PASSWORD>';
+        } else if (envCfg.mode === 'cloud') {
+          envVars.AEM_IMS_CLIENT_ID = '<YOUR_IMS_CLIENT_ID>';
+          envVars.AEM_IMS_CLIENT_SECRET = '<YOUR_IMS_CLIENT_SECRET>';
+        }
+        mcpServers[inst.id] = {
+          command: 'aem-mcp',
+          args: ['--instance', inst.id],
+          env: envVars
+        };
+      });
+      return { mcpServers };
+    }
+
+    function renderExportConfig() {
+      const cfg = buildClientConfigObject();
+      document.getElementById('export-code').textContent = JSON.stringify(cfg, null, 2);
+    }
+
+    function copyExportJson() {
+      const text = document.getElementById('export-code').textContent;
+      navigator.clipboard.writeText(text);
+      showToast('Copied mcpServers JSON to clipboard!');
+    }
+
+    function copyCliCommand() {
+      const inst = STATE.instances[activeInstanceId];
+      if (!inst) return;
+      const cmd = `aem-mcp --instance ${inst.id}`;
+      navigator.clipboard.writeText(cmd);
+      showToast(`Copied: ${cmd}`);
+    }
+
+    // Modals
+    function openNewInstanceModal() {
+      populateSelects();
+      document.getElementById('new-inst-preset').value = 'developer';
+      document.getElementById('new-inst-env').value = 'qa';
+      updateNewInstanceDefaults();
+      document.getElementById('modal-new-instance').classList.add('open');
+    }
+
+    function duplicateCurrentInstance() {
+      const inst = STATE.instances[activeInstanceId];
+      if (!inst) return;
+      populateSelects();
+      document.getElementById('new-inst-preset').value = inst.role_preset || 'developer';
+      document.getElementById('new-inst-env').value = 'qa';
+      document.getElementById('new-inst-id').value = `${inst.id}-copy`;
+      document.getElementById('new-inst-name').value = `${inst.name} (Copy)`;
+      document.getElementById('modal-new-instance').classList.add('open');
+    }
+
+    function updateNewInstanceDefaults() {
+      const presetId = document.getElementById('new-inst-preset').value;
+      const envId = document.getElementById('new-inst-env').value;
+      const preset = STATE.presets[presetId];
+      const slugRole = presetId === 'blank' ? 'custom' : presetId;
+      document.getElementById('new-inst-id').value = `aem-${slugRole}-${envId}`;
+      document.getElementById('new-inst-name').value = `${preset ? preset.name.split('/')[0].trim() : 'Custom Agent'} (${envId.toUpperCase()})`;
+    }
+
+    async function confirmCreateInstance() {
+      const presetId = document.getElementById('new-inst-preset').value;
+      const envId = document.getElementById('new-inst-env').value;
+      const id = document.getElementById('new-inst-id').value.trim().toLowerCase();
+      const name = document.getElementById('new-inst-name').value.trim();
+      const preset = STATE.presets[presetId] || STATE.presets.blank;
+
+      const payload = {
+        id,
+        name,
+        role_preset: presetId,
+        environment: envId,
+        allowed_tools: [...preset.tools]
+      };
+
+      try {
+        const res = await fetch('/api/instances', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (data.success) {
+          STATE = data.state;
+          activeInstanceId = data.instance.id;
+        }
+      } catch (e) {
+        STATE.instances[id] = payload;
+        activeInstanceId = id;
+      }
+      closeModals();
+      switchSidebarTab('instances');
+      showToast(`Created instance '${id}'`);
+    }
+
+    function openBatchModal() {
+      populateSelects();
+      document.getElementById('batch-preset').value = 'developer';
+      onBatchPresetChange();
+      const checks = document.getElementById('batch-env-checks');
+      checks.innerHTML = '';
+      Object.values(STATE.environments).forEach(env => {
+        const lbl = document.createElement('label');
+        lbl.className = 'env-check-pill';
+        lbl.innerHTML = `<input type="checkbox" value="${env.id}" checked /> <span class="${envBadgeClass(env.id)}">${env.id}</span>`;
+        checks.appendChild(lbl);
+      });
+      document.getElementById('modal-batch').classList.add('open');
+    }
+
+    function onBatchPresetChange() {
+      const presetId = document.getElementById('batch-preset').value;
+      const preset = STATE.presets[presetId];
+      if (!preset) return;
+      document.getElementById('batch-prefix').value = `aem-${presetId === 'content-author' ? 'author' : presetId}`;
+      document.getElementById('batch-name-prefix').value = preset.name.split('/')[0].trim();
+    }
+
+    async function confirmBatchGenerate() {
+      const presetId = document.getElementById('batch-preset').value;
+      const basePrefix = document.getElementById('batch-prefix').value.trim();
+      const namePrefix = document.getElementById('batch-name-prefix').value.trim();
+      const prodSafe = document.getElementById('batch-prod-safe').checked;
+      const envs = Array.from(document.querySelectorAll('#batch-env-checks input:checked')).map(el => el.value);
+
+      try {
+        const res = await fetch('/api/instances/batch-clone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            base_id_prefix: basePrefix,
+            name_prefix: namePrefix,
+            role_preset: presetId,
+            environments: envs,
+            disable_sandbox_in_prod: prodSafe
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          STATE = data.state;
+          if (data.created && data.created.length) {
+            activeInstanceId = data.created[0].id;
+          }
+        }
+      } catch (e) {}
+      closeModals();
+      switchSidebarTab('instances');
+      showToast(`Generated ${envs.length} environment instances!`);
+    }
+
+    function closeModals() {
+      document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.remove('open'));
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.style.display = 'block';
+      setTimeout(() => { t.style.display = 'none'; }, 2400);
+    }
+
+    loadState();
+  </script>
+</body>
+</html>

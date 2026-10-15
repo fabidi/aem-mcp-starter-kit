@@ -41,7 +41,13 @@ venv.bak/
 .DS_Store
 *.swp
 
-# SQLite runtime datasets (keep sample data in data/)
+# SQLite runtime datasets, exports, feedback, package exchange & user-saved local profiles
 /datasets/
+/exports/
+/feedback/
+/packages/
+/profiles/
 *.sqlite-journal
 *.sqlite-wal
+
+

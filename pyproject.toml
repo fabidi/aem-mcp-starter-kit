@@ -53,7 +53,9 @@ Issues = "https://github.com/fabidi/aem-mcp-starter-kit/issues"
 
 [project.scripts]
 aem-mcp = "aem_mcp.server:main"
+aem-mcp-configurator = "aem_mcp.configurator:run_configurator_server"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aem_mcp"]
+
 

@@ -167,6 +167,60 @@ pytest -v
 
 ---
 
+## 🎛️ Interactive MCP Instance, Role & Environment Configurator UI
+
+Inspired by enterprise MCP gateways (such as ZohoMCP), `aem-mcp-starter-kit` includes a built-in **Web Configurator UI** and **Multi-Environment Profile Engine**. Instead of exposing all 35 tools to every agent across every environment, you can create multiple scoped MCP instances—either **from scratch (`blank`)** or **from a Role Preset**—and bind each instance to a target environment tier (`dev`, `int`, `qa`, `stg`, `prod`, or custom tiers like `uat`).
+
+```bash
+# Launch the interactive Web Configurator UI at http://127.0.0.1:8765
+aem-mcp --configurator
+# Or use the dedicated CLI script:
+aem-mcp-configurator
+```
+
+### Key Configurator Capabilities
+1. **Configurable Environment Tiers (`dev` → `prod`):**
+   - Pre-seeded with **`dev`** (Local Mock Simulator), **`int`**, **`qa`**, **`stg`**, and **`prod`** (AEMaaCS / On-Prem 6.5), with support for adding custom environments (e.g., `uat`, `perf`) and configuring URLs, auth modes (`mock`, `onprem`, `cloud`), and domain profiles.
+2. **Create Custom Instances From Scratch or Role Presets:**
+   - **From Scratch (`blank`):** Start with `0` tools and hand-pick the exact toolset authorized for a specialized agent.
+   - **AEM Developer / Oak Architect (`developer` — 24 tools on DEV..STG / 18 tools on PROD):** JCR exploration, QueryBuilder, JCR-SQL2 compiler, Oak Index Linter, CRX Package Manager sync, datasets, and Python sandbox.
+   - **Content Author & QA Auditor (`content-author` — 9 tools):** JCR inspection + content integrity, cross-reference, and localization coverage audits (strictly read-only, no code execution or SQLite analytics).
+   - **Data & Merchandising Analyst (`data-analyst` — 12 tools):** Bulk QueryBuilder streaming, SQLite dataset analytics, cross-system matching, and Excel/CSV export.
+   - **Pure Enterprise AEM (`pure-aem` — 28 tools)** & **Full Unscoped (`full` — 35 tools)**.
+3. **⚡ Batch Role × Environment Generator (`<role>-<env>`):**
+   - Generate an entire promotion pipeline of MCP instances for a role in one click (e.g., `aem-dev-dev`, `aem-dev-int`, `aem-dev-qa`, `aem-dev-stg`, `aem-dev-prod`), automatically stripping mutating tools (`execute_code`, `package_create`, `package_set_filters`, `package_build`, `package_upload`, `package_install`) on `prod` instances while retaining read-only `package_list` and `package_download`.
+4. **1-Click `mcpServers` Client Config Exporter:**
+   - Export ready-to-paste JSON for Claude Desktop, Cursor, or Antigravity IDE scoped to a **Single Instance**, **All Environments of Current Role (`DEV..PROD`)**, or **All Configured Instances**.
+
+```bash
+# Run a specific scoped MCP instance directly via CLI:
+aem-mcp --instance aem-dev-stg
+aem-mcp --instance aem-author-prod
+
+# Or print the generated mcpServers JSON directly to stdout:
+aem-mcp --export-config
+```
+
+---
+
+## 📦 Environment-Scoped CRX Package Manager & Multi-Instance Sync
+
+When synchronizing content across AEM environments (e.g. pulling an authored page tree from **INT** or **STG** down to **Local DEV**), the architecture is strictly **environment-scoped**:
+- **One MCP Process per Environment:** Each MCP process is bound to a single configured AEM environment (`aem://environment` identifies whether an instance is `dev`, `int`, `qa`, `stg`, or `prod`).
+- **No Target Environment Parameter in Tools:** Package tools never accept an environment argument—the selected MCP connection determines the target environment. There is no hidden cross-environment network bridge inside a single MCP process; coordination happens through the host exposing multiple named MCP connections.
+- **Zero-Token Private Exchange Storage (`package_handle`):** Package ZIP bytes are stored on disk in MCP-managed private exchange storage (`packages/exchange/`) and represented to the agent exclusively by an opaque handle (`pkg_<12hex>`). Raw ZIP bytes are **never** sent through the conversation or loaded into the model context.
+- **Intentional Lifecycle Separation & Confirmation Gates:** Creation, filter updates, building, upload, and installation require explicit confirmation (`confirm=True`), whereas `package_list` and `package_download` are strictly read-only. Filter validation blocks unsafe roots (`/` and `/etc/packages`).
+
+```text
+INT MCP (aem-dev-int):
+  package_create -> package_set_filters -> package_build -> package_download (returns pkg_<12hex>)
+
+Local MCP (aem-dev-local):
+  package_upload(package_handle="pkg_<12hex>") -> package_install
+```
+
+---
+
 ## Connecting to AI Clients
 
 ### Antigravity IDE Configuration
@@ -281,6 +335,17 @@ Add to your project's `.cursor/mcp.json`:
 | `dataset_match(left_id, right_id, left_field, right_field)` | Cross-system reconciliation between AEM content and Master Entity Registry. |
 | `dataset_export(dataset_id, format)` | Generate a downloadable CSV or standalone Excel (`.xlsx`) audit workbook. |
 | `dataset_discard(dataset_id)` | Clean up temporary dataset tables. |
+
+### CRX Package Manager & Environment Sync Tools
+| Tool | Description |
+| :--- | :--- |
+| `package_list(group)` | **Read-only:** List CRX packages in the active MCP instance's AEM environment. |
+| `package_create(name, group, version, filters, confirm)` | Create a CRX package definition via `/crx/packmgr/service/.json/...?cmd=create` and optionally set filters via `update.jsp` (`confirm=True` required). |
+| `package_set_filters(name, filters, group, version, confirm)` | Replace repository filter roots as JSON via `/crx/packmgr/update.jsp`; blocks `/` and `/etc/packages` (`confirm=True` required). |
+| `package_build(name, group, version, confirm)` | Assemble/build a CRX package in the active environment (`confirm=True` required). |
+| `package_download(name, group, version)` | **Read-only:** Stage built package bytes into private exchange storage and return an opaque `package_handle` (`pkg_<12hex>`) without loading bytes into LLM context. |
+| `package_upload(package_handle, force, confirm)` | Upload a staged `package_handle` from private exchange storage into the active environment (`confirm=True` required). |
+| `package_install(name, group, version, confirm)` | Install an uploaded or built package into the active environment's repository (`confirm=True` required). |
 
 ---
 

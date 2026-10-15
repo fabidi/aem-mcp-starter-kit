@@ -132,6 +132,12 @@ def aem_prompt_resource() -> str:
 def aem_runtime_resource() -> str:
     """Safe active-environment runtime configuration."""
     info = get_runtime_info()
+    info["active_instance"] = _ACTIVE_SCOPING.get("active_instance", "default-unscoped")
+    info["role_preset"] = _ACTIVE_SCOPING.get("role_preset", "full")
+    env_meta = _ACTIVE_SCOPING.get("environment")
+    if isinstance(env_meta, dict) and env_meta.get("id"):
+        info["environment_tier"] = str(env_meta["id"])
+    info["authorized_tools_count"] = str(len(_REGISTERED_TOOL_NAMES))
     if not CONFIG.is_pure_aem():
         p = DOMAIN_MANAGER.active_profile
         info.update({
@@ -150,6 +156,27 @@ def aem_runtime_resource() -> str:
             "description": "Operating in Pure AEM Content Intelligence & Oak Indexing mode."
         })
     return json.dumps(info, indent=2)
+
+
+@mcp.resource("aem://environment")
+def aem_environment_resource() -> str:
+    """Identifies the active MCP instance and the single AEM environment it is bound to."""
+    env_meta = _ACTIVE_SCOPING.get("environment") or {}
+    env_id = str(env_meta.get("id") or os.getenv("AEM_MCP_ENV") or "dev")
+    pkg_tools = [t for t in _REGISTERED_TOOL_NAMES if t.startswith("package_")]
+    payload = {
+        "active_instance": _ACTIVE_SCOPING.get("active_instance", "default-unscoped"),
+        "role_preset": _ACTIVE_SCOPING.get("role_preset", "full"),
+        "environment_id": env_id,
+        "environment_name": env_meta.get("name", f"{env_id.upper()} Environment"),
+        "tier": env_meta.get("tier", env_id),
+        "mode": CONFIG.mode,
+        "aem_url": CONFIG.aem_url if not CONFIG.is_mock() else "virtual://jcr-simulator",
+        "authorized_package_tools": pkg_tools,
+        "package_exchange_mode": "opaque_handle_private_storage",
+        "note": "Each MCP process is bound to one AEM environment. Package operations act only on this instance's environment.",
+    }
+    return json.dumps(payload, indent=2)
 
 
 # --- Master Entity Registry Tools (Registered conditionally when CONFIG.enable_registry is True) ---
@@ -212,7 +239,6 @@ def registry_query_dataset(
 
 # --- AEM Core Read-Only Tools ---
 
-@mcp.tool()
 def aem_json(path: str, depth: int = 0) -> str:
     """Read an AEM repository path as JSON using Sling selector conventions (depth=0..3)."""
     depth = min(max(int(depth), 0), 3)
@@ -232,13 +258,11 @@ def aem_json(path: str, depth: int = 0) -> str:
     }, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def aem_traverse(path: str, depth: int = 1) -> str:
     """Explore an AEM node and its immediate descendant levels (bounded up to depth 3)."""
     return aem_json(path=path, depth=min(max(depth, 1), 3))
 
 
-@mcp.tool()
 def aem_querybuilder(query: dict[str, str]) -> str:
     """Run a bounded, read-only AEM QueryBuilder query (path, type, fulltext, property, p.limit)."""
     if "path" not in query:
@@ -258,7 +282,6 @@ def aem_querybuilder(query: dict[str, str]) -> str:
     }, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def aem_find_references(path: str) -> str:
     """Find repository paths (templates, models, fragments, assets) referenced by an AEM node."""
     if CONFIG.is_mock():
@@ -280,7 +303,6 @@ def aem_find_references(path: str) -> str:
     }, indent=2)
 
 
-@mcp.tool()
 def aem_discover_properties(
     path: str,
     focus_term: str = "",
@@ -329,7 +351,6 @@ def aem_discover_properties(
     }, indent=2)
 
 
-@mcp.tool()
 def aem_query_dataset(
     query: dict[str, str],
     properties: list[str] | None = None,
@@ -412,21 +433,18 @@ def aem_query_dataset(
 
 # --- Dataset Analysis & Export Tools ---
 
-@mcp.tool()
 def dataset_info(dataset_id: str) -> str:
     """Retrieve metadata and column information for a materialized dataset."""
     meta = get_dataset_metadata(dataset_id)
     return json.dumps(meta, indent=2)
 
 
-@mcp.tool()
 def dataset_get_rows(dataset_id: str, offset: int = 0, limit: int = 100) -> str:
     """Read a bounded window of rows from a materialized dataset."""
     rows = get_dataset_rows(dataset_id=dataset_id, offset=offset, limit=limit)
     return json.dumps({"dataset_id": dataset_id, "offset": offset, "limit": limit, "rows": rows}, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def dataset_analyze(
     dataset_id: str,
     operation: str,
@@ -457,7 +475,6 @@ def dataset_analyze(
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def dataset_match(
     left_dataset_id: str,
     right_dataset_id: str,
@@ -476,21 +493,18 @@ def dataset_match(
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def dataset_export(dataset_id: str, format: str = "csv") -> str:
     """Generate a downloadable CSV or Excel (.xlsx) export artifact with a local HTTP download link."""
     res = export_dataset(dataset_id=dataset_id, fmt=format)
     return json.dumps(res, indent=2)
 
 
-@mcp.tool()
 def dataset_discard(dataset_id: str) -> str:
     """Delete a temporary materialized dataset and free storage."""
     deleted = discard_dataset(dataset_id)
     return json.dumps({"dataset_id": dataset_id, "deleted": deleted})
 
 
-@mcp.tool()
 def dataset_import(file_path: str, format: str = "auto", name: str = "") -> str:
     """
     Import an external structured file (CSV, JSON array, or JSON Lines) directly into an on-disk SQLite dataset table.
@@ -514,7 +528,6 @@ class _LiveJcrAdapter:
 
 # --- Content & Discrepancy Auditing Tools ---
 
-@mcp.tool()
 def aem_audit_content_integrity(
     root_path: str = "/content/novaria",
     check_assets: bool = True,
@@ -537,7 +550,6 @@ def aem_audit_content_integrity(
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def aem_audit_cross_reference(
     path: str = "/content/novaria/us/en/hotels",
     limit: int = 100
@@ -554,7 +566,6 @@ def aem_audit_cross_reference(
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def aem_audit_localization_coverage(
     base_locale: str = "us/en",
     target_locales: list[str] | None = None,
@@ -574,7 +585,6 @@ def aem_audit_localization_coverage(
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def aem_compile_querybuilder_sql2(query: dict[str, str]) -> str:
     """Compile an AEM QueryBuilder predicate map into an optimized Jackrabbit Oak JCR-SQL2 query for index analysis."""
     try:
@@ -614,7 +624,6 @@ _CALL_BLOCKLIST = {
 }
 
 
-@mcp.tool()
 def execute_code(code: str, timeout_seconds: int = 120) -> str:
     """Run bounded in-memory Python calculations over retrieved data. Filesystem, network, dunder introspection, and unbounded loops are strictly blocked."""
     tree = ast.parse(code, mode="exec")
@@ -659,7 +668,6 @@ def execute_code(code: str, timeout_seconds: int = 120) -> str:
     return json.dumps(sanitized, ensure_ascii=False, indent=2)
 
 
-@mcp.tool()
 def submit_tool_recommendation(
     task_summary: str,
     missing_capability: str,
@@ -683,7 +691,6 @@ def submit_tool_recommendation(
     return json.dumps({"submitted": True, "status": "recorded"})
 
 
-@mcp.tool()
 def aem_lint_query_indexing(query: dict[str, Any]) -> str:
     """
     Lint an AEM QueryBuilder query for Apache Jackrabbit Oak indexing performance.
@@ -922,21 +929,315 @@ def aem_audit_domain_rules(domain: str = "", limit: int = 100) -> str:
     return json.dumps(findings, indent=2)
 
 
-# Conditionally register Reference Registry and Multi-Domain tools if enabled
-if CONFIG.enable_registry:
-    mcp.tool()(registry_indexes)
-    mcp.tool()(registry_search)
-    mcp.tool()(registry_get)
-    mcp.tool()(registry_query_dataset)
-    mcp.tool()(domain_list)
-    mcp.tool()(domain_switch)
-    mcp.tool()(domain_get_active)
-    mcp.tool()(aem_audit_domain_rules)
+# --- Environment-Scoped CRX Package Manager & Multi-Instance Sync Tools ---
+
+from aem_mcp.packages import PACKAGE_MANAGER
 
 
-def main():
+def _current_bound_env_id() -> str:
+    env_meta = _ACTIVE_SCOPING.get("environment")
+    if isinstance(env_meta, dict) and env_meta.get("id"):
+        return str(env_meta["id"])
+    return (
+        os.getenv("AEM_MCP_ENV", "").strip()
+        or _ACTIVE_SCOPING.get("active_instance", "")
+        or "dev"
+    )
+
+
+def package_list(group: str = "") -> str:
+    """
+    Read-only: List CRX packages in the active MCP instance's AEM environment.
+    Does not accept a target environment parameter; operates strictly on the bound instance environment.
+    """
+    res = PACKAGE_MANAGER.list_packages(env_id=_current_bound_env_id(), group=group)
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+def package_create(
+    name: str,
+    group: str = "my_packages",
+    version: str = "1.0",
+    filters: list[str] | None = None,
+    confirm: bool = False,
+) -> str:
+    """
+    Create an empty CRX package definition in the active environment and optionally configure repository filter roots.
+    Requires explicit confirmation (confirm=True). Prevents '/' and '/etc/packages' as content filters.
+    """
+    res = PACKAGE_MANAGER.create_package(
+        name=name,
+        group=group,
+        version=version,
+        filters=filters,
+        confirm=confirm,
+        env_id=_current_bound_env_id(),
+        ims_auth=_IMS_AUTH,
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+def package_set_filters(
+    name: str,
+    filters: list[str],
+    group: str = "my_packages",
+    version: str = "1.0",
+    confirm: bool = False,
+) -> str:
+    """
+    Replace repository filter roots on an existing CRX package definition via /crx/packmgr/update.jsp.
+    Validates absolute repository paths and requires explicit confirmation (confirm=True).
+    """
+    res = PACKAGE_MANAGER.set_filters(
+        name=name,
+        filters=filters,
+        group=group,
+        version=version,
+        confirm=confirm,
+        env_id=_current_bound_env_id(),
+        ims_auth=_IMS_AUTH,
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+def package_build(
+    name: str,
+    group: str = "my_packages",
+    version: str = "1.0",
+    confirm: bool = False,
+) -> str:
+    """
+    Build/assemble an existing CRX package in the active environment.
+    Requires explicit confirmation (confirm=True).
+    """
+    res = PACKAGE_MANAGER.build_package(
+        name=name,
+        group=group,
+        version=version,
+        confirm=confirm,
+        env_id=_current_bound_env_id(),
+        simulator=_SIMULATOR,
+        ims_auth=_IMS_AUTH,
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+def package_download(
+    name: str,
+    group: str = "my_packages",
+    version: str = "1.0",
+) -> str:
+    """
+    Read-only: Download a built CRX package from the active environment into MCP-managed private exchange storage
+    and return an opaque package_handle (pkg_<12hex>). Package bytes are never loaded into model context.
+    """
+    res = PACKAGE_MANAGER.download_package(
+        name=name,
+        group=group,
+        version=version,
+        env_id=_current_bound_env_id(),
+        ims_auth=_IMS_AUTH,
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+def package_upload(
+    package_handle: str,
+    force: bool = True,
+    confirm: bool = False,
+) -> str:
+    """
+    Upload a package from MCP-managed private exchange storage (by opaque package_handle)
+    into the active MCP instance's AEM environment. Requires explicit confirmation (confirm=True).
+    """
+    res = PACKAGE_MANAGER.upload_package(
+        package_handle=package_handle,
+        force=force,
+        confirm=confirm,
+        env_id=_current_bound_env_id(),
+        ims_auth=_IMS_AUTH,
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+def package_install(
+    name: str,
+    group: str = "my_packages",
+    version: str = "1.0",
+    confirm: bool = False,
+) -> str:
+    """
+    Install an uploaded or built CRX package in the active MCP instance's AEM environment.
+    Requires explicit confirmation (confirm=True).
+    """
+    res = PACKAGE_MANAGER.install_package(
+        name=name,
+        group=group,
+        version=version,
+        confirm=confirm,
+        env_id=_current_bound_env_id(),
+        simulator=_SIMULATOR,
+        ims_auth=_IMS_AUTH,
+    )
+    return json.dumps(res, ensure_ascii=False, indent=2)
+
+
+# --- Instance, Role & Environment Scoping & Dynamic Tool Registration ---
+
+import argparse
+import sys
+from aem_mcp.configurator import CONFIGURATOR_STORE, run_configurator_server
+
+_CORE_SERVER_TOOLS = [
+    aem_json,
+    aem_traverse,
+    aem_querybuilder,
+    aem_find_references,
+    aem_discover_properties,
+    aem_query_dataset,
+    dataset_info,
+    dataset_get_rows,
+    dataset_analyze,
+    dataset_match,
+    dataset_export,
+    dataset_discard,
+    dataset_import,
+    aem_audit_content_integrity,
+    aem_audit_cross_reference,
+    aem_audit_localization_coverage,
+    aem_compile_querybuilder_sql2,
+    package_list,
+    package_create,
+    package_set_filters,
+    package_build,
+    package_download,
+    package_upload,
+    package_install,
+    execute_code,
+    submit_tool_recommendation,
+    aem_lint_query_indexing,
+]
+
+_REGISTRY_AND_DOMAIN_TOOLS = [
+    registry_indexes,
+    registry_search,
+    registry_get,
+    registry_query_dataset,
+    domain_list,
+    domain_switch,
+    domain_get_active,
+    aem_audit_domain_rules,
+]
+
+_ALL_SERVER_TOOLS = _CORE_SERVER_TOOLS + _REGISTRY_AND_DOMAIN_TOOLS
+_ACTIVE_SCOPING: dict[str, Any] = {}
+_REGISTERED_TOOL_NAMES: list[str] = []
+
+
+def _parse_early_scoping_args(argv: list[str] | None = None) -> argparse.Namespace:
+    target_argv = argv if argv is not None else sys.argv[1:]
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--instance", default="")
+    parser.add_argument("--profile", default="")
+    parser.add_argument("--env", default="")
+    known, _ = parser.parse_known_args(target_argv)
+    return known
+
+
+def _apply_runtime_scoping_and_register_tools(
+    instance_id: str = "",
+    profile_preset: str = "",
+    env_id: str = "",
+    allowed_tools_csv: str = "",
+) -> dict[str, Any]:
+    global _ACTIVE_SCOPING, _REGISTERED_TOOL_NAMES, _IMS_AUTH
+
+    early = _parse_early_scoping_args()
+    scoping = CONFIGURATOR_STORE.resolve_runtime_scoping(
+        instance_id=instance_id or early.instance,
+        profile_preset=profile_preset or early.profile,
+        env_id=env_id or early.env,
+        allowed_tools_csv=allowed_tools_csv,
+    )
+    _ACTIVE_SCOPING = scoping
+
+    env_cfg = scoping.get("environment")
+    if isinstance(env_cfg, dict):
+        if "AEM_MODE" not in os.environ and "AEM_MCP_MODE" not in os.environ and env_cfg.get("mode"):
+            CONFIG.mode = env_cfg["mode"]
+        if "AEM_URL" not in os.environ and env_cfg.get("aem_url"):
+            CONFIG.aem_url = str(env_cfg["aem_url"]).rstrip("/")
+        if "AEM_MCP_ENABLE_REGISTRY" not in os.environ and "enable_registry" in env_cfg:
+            CONFIG.enable_registry = bool(env_cfg["enable_registry"])
+        if "AEM_DOMAIN" not in os.environ and env_cfg.get("default_domain"):
+            try:
+                DOMAIN_MANAGER.switch_domain(str(env_cfg["default_domain"]))
+            except Exception:
+                pass
+        if CONFIG.mode == "cloud" and _IMS_AUTH is None:
+            _IMS_AUTH = AdobeImsAuthProvider()
+        _reload_simulator_for_active_domain()
+
+    allowed = scoping.get("allowed_tools")
+    _REGISTERED_TOOL_NAMES = []
+
+    if allowed is not None:
+        allowed_set = set(allowed)
+        if os.getenv("AEM_MCP_ENABLE_REGISTRY", "").lower() in ("false", "0", "no"):
+            allowed_set -= {fn.__name__ for fn in _REGISTRY_AND_DOMAIN_TOOLS}
+        for fn in _ALL_SERVER_TOOLS:
+            if fn.__name__ in allowed_set:
+                mcp.tool()(fn)
+                _REGISTERED_TOOL_NAMES.append(fn.__name__)
+    else:
+        for fn in _CORE_SERVER_TOOLS:
+            mcp.tool()(fn)
+            _REGISTERED_TOOL_NAMES.append(fn.__name__)
+        if CONFIG.enable_registry:
+            for fn in _REGISTRY_AND_DOMAIN_TOOLS:
+                mcp.tool()(fn)
+                _REGISTERED_TOOL_NAMES.append(fn.__name__)
+
+    return scoping
+
+
+_apply_runtime_scoping_and_register_tools()
+
+
+def main(argv: list[str] | None = None) -> None:
+    parser = argparse.ArgumentParser(
+        prog="aem-mcp",
+        description="AEM Content Intelligence MCP Server & Interactive Instance Configurator",
+    )
+    parser.add_argument(
+        "--configurator",
+        "--ui",
+        action="store_true",
+        dest="configurator",
+        help="Launch the interactive Web Configurator UI (ZohoMCP-style role & environment toolset manager).",
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Host for the Configurator UI server (default: 127.0.0.1).")
+    parser.add_argument("--port", type=int, default=8765, help="Port for the Configurator UI server (default: 8765).")
+    parser.add_argument("--no-browser", action="store_true", help="Do not automatically open the browser when starting Configurator UI.")
+    parser.add_argument("--instance", default="", help="Run a specific configured MCP instance ID (e.g. aem-dev-stg, aem-author-prod).")
+    parser.add_argument("--profile", default="", help="Run with a role preset toolset (developer, content-author, data-analyst, pure-aem, full, blank).")
+    parser.add_argument("--env", default="", help="Target environment tier (dev, int, qa, stg, prod).")
+    parser.add_argument("--export-config", action="store_true", help="Print generated mcpServers client JSON configuration and exit.")
+
+    args, _ = parser.parse_known_args(argv)
+
+    if args.configurator:
+        run_configurator_server(host=args.host, port=args.port, open_browser=not args.no_browser)
+        return
+
+    if args.export_config:
+        targets = [args.instance] if args.instance else None
+        print(json.dumps(CONFIGURATOR_STORE.generate_client_config(targets), indent=2))
+        return
+
     mcp.run()
 
 
 if __name__ == "__main__":
     main()
+

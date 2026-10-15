@@ -9,7 +9,7 @@ DATA_DIR = ROOT_DIR / "data"
 
 class Config:
     def __init__(self):
-        self.mode: Literal["mock", "onprem", "cloud"] = os.getenv("AEM_MODE", "mock").lower()
+        self.mode: Literal["mock", "onprem", "cloud"] = (os.getenv("AEM_MODE") or os.getenv("AEM_MCP_MODE", "mock")).lower()
         self.mock_jcr_path = Path(os.getenv("AEM_MOCK_JCR_PATH", DATA_DIR / "jcr_mock_store.json"))
         self.property_master_db = Path(os.getenv("PROPERTY_MASTER_DB", DATA_DIR / "property_master.sqlite"))
         
