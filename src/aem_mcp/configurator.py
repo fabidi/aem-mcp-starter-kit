@@ -444,6 +444,31 @@ ROLE_PRESETS: dict[str, dict[str, Any]] = {
             "submit_tool_recommendation",
         ],
     },
+    "developer-readonly": {
+        "id": "developer-readonly",
+        "name": "AEM Developer (PROD Read-Only)",
+        "description": "Read-only developer & Oak architect toolset (JCR, QueryBuilder, SQL2 compiler, Oak index linter, datasets, package_list/download) with all mutating tools stripped.",
+        "tools": [
+            "aem_json",
+            "aem_traverse",
+            "aem_querybuilder",
+            "aem_find_references",
+            "aem_discover_properties",
+            "aem_compile_querybuilder_sql2",
+            "aem_lint_query_indexing",
+            "aem_query_dataset",
+            "dataset_import",
+            "dataset_info",
+            "dataset_get_rows",
+            "dataset_analyze",
+            "dataset_match",
+            "dataset_export",
+            "dataset_discard",
+            "package_list",
+            "package_download",
+            "submit_tool_recommendation",
+        ],
+    },
     "content-author": {
         "id": "content-author",
         "name": "Content Author & Localization QA",
@@ -499,7 +524,7 @@ ROLE_PRESETS: dict[str, dict[str, Any]] = {
 def _default_instances() -> dict[str, dict[str, Any]]:
     """Pre-seeded multi-environment instances demonstrating role x environment scoping."""
     dev_tools = list(ROLE_PRESETS["developer"]["tools"])
-    dev_prod_tools = [t for t in dev_tools if t not in _PROD_MUTATING_TOOLS]
+    dev_prod_tools = list(ROLE_PRESETS["developer-readonly"]["tools"])
     author_tools = list(ROLE_PRESETS["content-author"]["tools"])
 
     return {
@@ -533,7 +558,7 @@ def _default_instances() -> dict[str, dict[str, Any]]:
         "aem-dev-prod": {
             "id": "aem-dev-prod",
             "name": "AEM Developer (PROD Read-Only)",
-            "role_preset": "developer",
+            "role_preset": "developer-readonly",
             "environment": "prod",
             "root_path_override": "",
             "allowed_tools": dev_prod_tools,
@@ -560,6 +585,9 @@ def _default_instances() -> dict[str, dict[str, Any]]:
     }
 
 
+DEFAULT_INSTANCE_TEMPLATES: dict[str, dict[str, Any]] = _default_instances()
+
+
 class ConfiguratorStore:
     """Manages persistence of environments and scoped MCP instances in profiles/."""
 
@@ -574,8 +602,16 @@ class ConfiguratorStore:
         if self.state_file.exists():
             try:
                 data = json.loads(self.state_file.read_text(encoding="utf-8"))
-                self.environments = data.get("environments") or json.loads(json.dumps(DEFAULT_ENVIRONMENTS))
-                self.instances = data.get("instances") or _default_instances()
+                self.environments = (
+                    data["environments"]
+                    if isinstance(data.get("environments"), dict) and len(data["environments"]) > 0
+                    else json.loads(json.dumps(DEFAULT_ENVIRONMENTS))
+                )
+                self.instances = (
+                    data["instances"]
+                    if isinstance(data.get("instances"), dict)
+                    else _default_instances()
+                )
                 return
             except Exception:
                 pass
@@ -708,6 +744,60 @@ class ConfiguratorStore:
         self.save()
         return True
 
+    def recreate_from_default_template(
+        self,
+        template_id: str,
+        new_id: str = "",
+        new_name: str = "",
+        env_id: str = "",
+    ) -> dict[str, Any]:
+        """
+        Recreate a deleted (or cloned) default instance from its canonical built-in template
+        ('aem-dev-local', 'aem-dev-int', 'aem-dev-stg', 'aem-dev-prod', 'aem-author-qa', 'aem-author-prod').
+        Automatically restores the target default environment if it was previously deleted.
+        """
+        defaults = _default_instances()
+        clean_template_id = template_id.strip().lower()
+        if clean_template_id not in defaults:
+            raise ValueError(
+                f"Unknown default instance template '{template_id}'. "
+                f"Available templates: {', '.join(defaults.keys())}"
+            )
+        tpl = defaults[clean_template_id]
+        target_env = (env_id or tpl["environment"]).strip().lower()
+        if target_env not in self.environments and target_env in DEFAULT_ENVIRONMENTS:
+            self.environments[target_env] = json.loads(json.dumps(DEFAULT_ENVIRONMENTS[target_env]))
+
+        return self.upsert_instance({
+            "id": (new_id or tpl["id"]).strip().lower(),
+            "name": (new_name or tpl["name"]).strip(),
+            "role_preset": tpl["role_preset"],
+            "environment": target_env,
+            "root_path_override": tpl.get("root_path_override", ""),
+            "allowed_tools": list(tpl["allowed_tools"]),
+        })
+
+    def restore_default_instances(
+        self,
+        instance_ids: list[str] | None = None,
+        overwrite: bool = False,
+    ) -> list[dict[str, Any]]:
+        """
+        Restore missing (or all, when overwrite=True) built-in default instances and their default environments.
+        """
+        defaults = _default_instances()
+        targets = [i.strip().lower() for i in instance_ids] if instance_ids else list(defaults.keys())
+        restored: list[dict[str, Any]] = []
+
+        for tid in targets:
+            if tid not in defaults:
+                continue
+            if not overwrite and tid in self.instances:
+                continue
+            restored.append(self.recreate_from_default_template(tid))
+
+        return restored
+
     def resolve_runtime_scoping(
         self,
         instance_id: str = "",
@@ -800,6 +890,7 @@ class ConfiguratorStore:
             "categories": TOOL_CATEGORIES,
             "tools": TOOL_CATALOG,
             "presets": ROLE_PRESETS,
+            "default_instance_templates": _default_instances(),
             "environments": self.environments,
             "instances": self.instances,
             "client_config_preview": self.generate_client_config(),
@@ -882,6 +973,33 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
                     self._send_json(200, {"success": True, "created": created, "state": active_store.get_full_state()})
                     return
 
+                if path == "/api/instances/restore-defaults":
+                    ids_arg = body.get("instance_ids")
+                    template_id = str(body.get("template_id", "")).strip()
+                    if template_id:
+                        recreated = active_store.recreate_from_default_template(
+                            template_id=template_id,
+                            new_id=str(body.get("new_id") or body.get("id") or ""),
+                            new_name=str(body.get("new_name") or body.get("name") or ""),
+                            env_id=str(body.get("environment") or ""),
+                        )
+                        self._send_json(
+                            200,
+                            {
+                                "success": True,
+                                "instance": recreated,
+                                "restored": [recreated],
+                                "state": active_store.get_full_state(),
+                            },
+                        )
+                        return
+                    restored = active_store.restore_default_instances(
+                        instance_ids=list(ids_arg) if isinstance(ids_arg, list) else None,
+                        overwrite=bool(body.get("overwrite", False)),
+                    )
+                    self._send_json(200, {"success": True, "restored": restored, "state": active_store.get_full_state()})
+                    return
+
                 if path == "/api/instances/delete":
                     deleted = active_store.delete_instance(str(body.get("id", "")))
                     self._send_json(200, {"success": deleted, "state": active_store.get_full_state()})
@@ -903,7 +1021,7 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
             self.wfile.flush()
 
         def _send_json(self, status: int, data: dict[str, Any]) -> None:
-            raw = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+            raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
             self.send_response(status)
             self.send_header("Content-Type", "application/json; charset=utf-8")
             self.send_header("Content-Length", str(len(raw)))

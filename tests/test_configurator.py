@@ -16,6 +16,7 @@ import pytest
 from aem_mcp.configurator import (
     ALL_TOOL_NAMES,
     DEFAULT_ENVIRONMENTS,
+    DEFAULT_INSTANCE_TEMPLATES,
     ROLE_PRESETS,
     TOOL_CATALOG,
     TOOL_CATEGORIES,
@@ -37,6 +38,8 @@ def test_default_environments_and_catalog(tmp_path: Path):
     assert len(TOOL_CATEGORIES) == 7
     assert len(TOOL_CATALOG) == 35
     assert len(ALL_TOOL_NAMES) == 35
+    assert "developer-readonly" in ROLE_PRESETS
+    assert len(DEFAULT_INSTANCE_TEMPLATES) == 6
 
 
 def test_create_instance_from_scratch_and_from_preset(tmp_path: Path):
@@ -73,6 +76,45 @@ def test_create_instance_from_scratch_and_from_preset(tmp_path: Path):
     assert set(author_stg["allowed_tools"]) == set(ROLE_PRESETS["content-author"]["tools"])
     assert "execute_code" not in author_stg["allowed_tools"]
     assert "aem_lint_query_indexing" not in author_stg["allowed_tools"]
+
+
+def test_delete_and_recreate_default_instances_from_templates(tmp_path: Path):
+    """Verify deleted default instances can be recreated individually or restored in bulk from templates."""
+    store = ConfiguratorStore(profiles_dir=tmp_path / "profiles")
+    default_ids = list(DEFAULT_INSTANCE_TEMPLATES.keys())
+    assert set(store.instances.keys()) == set(default_ids)
+
+    # 1. Delete a default instance (aem-dev-prod) and its profile file
+    assert store.delete_instance("aem-dev-prod") is True
+    assert "aem-dev-prod" not in store.instances
+    assert not (tmp_path / "profiles" / "aem-dev-prod.json").exists()
+
+    # Recreate aem-dev-prod directly from its built-in template
+    recreated = store.recreate_from_default_template("aem-dev-prod")
+    assert recreated["id"] == "aem-dev-prod"
+    assert recreated["role_preset"] == "developer-readonly"
+    assert recreated["environment"] == "prod"
+    assert set(recreated["allowed_tools"]) == set(DEFAULT_INSTANCE_TEMPLATES["aem-dev-prod"]["allowed_tools"])
+    assert "execute_code" not in recreated["allowed_tools"]
+    assert (tmp_path / "profiles" / "aem-dev-prod.json").exists()
+
+    # 2. Delete ALL default instances and verify empty state persists cleanly across reload
+    for inst_id in list(store.instances.keys()):
+        store.delete_instance(inst_id)
+    assert store.instances == {}
+
+    reloaded_store = ConfiguratorStore(profiles_dir=tmp_path / "profiles")
+    assert reloaded_store.instances == {}
+
+    # 3. Also delete a default environment ('qa') and verify restore_default_instances restores both
+    reloaded_store.delete_environment("qa")
+    assert "qa" not in reloaded_store.environments
+
+    restored = reloaded_store.restore_default_instances()
+    assert len(restored) == 6
+    assert set(reloaded_store.instances.keys()) == set(default_ids)
+    assert "qa" in reloaded_store.environments
+    assert reloaded_store.instances["aem-author-qa"]["root_path_override"] == "/content/novaria"
 
 
 def test_batch_clone_role_across_environments(tmp_path: Path):
@@ -141,12 +183,16 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             assert 'id="theme-toggle"' in html
             assert '[data-theme="light"]' in html
             assert "toggleTheme()" in html
+            assert 'id="new-inst-default-template"' in html
+            assert "restoreDefaultInstances" in html
 
-        # 2. GET /api/state returns full state
+        # 2. GET /api/state returns full state including default_instance_templates
         with urllib.request.urlopen(f"{base_url}/api/state", timeout=5) as resp:
             state = json.loads(resp.read().decode("utf-8"))
             assert "environments" in state
             assert "instances" in state
+            assert "default_instance_templates" in state
+            assert len(state["default_instance_templates"]) == 6
             assert len(state["tools"]) == 35
 
         # 3. POST /api/environments creates a new environment
@@ -184,6 +230,30 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             res = json.loads(resp.read().decode("utf-8"))
             assert res["success"] is True
             assert res["instance"]["allowed_tools"] == ["aem_json", "aem_querybuilder", "aem_lint_query_indexing"]
+
+        # 5. Delete a default instance and recreate it via POST /api/instances/restore-defaults
+        del_req = urllib.request.Request(
+            f"{base_url}/api/instances/delete",
+            data=json.dumps({"id": "aem-dev-local"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(del_req, timeout=5) as resp:
+            del_res = json.loads(resp.read().decode("utf-8"))
+            assert del_res["success"] is True
+            assert "aem-dev-local" not in del_res["state"]["instances"]
+
+        restore_req = urllib.request.Request(
+            f"{base_url}/api/instances/restore-defaults",
+            data=json.dumps({"template_id": "aem-dev-local"}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(restore_req, timeout=5) as resp:
+            restore_res = json.loads(resp.read().decode("utf-8"))
+            assert restore_res["success"] is True
+            assert restore_res["instance"]["id"] == "aem-dev-local"
+            assert "aem-dev-local" in restore_res["state"]["instances"]
     finally:
         server.shutdown()
         server.server_close()

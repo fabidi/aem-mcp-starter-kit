@@ -576,7 +576,10 @@
       <div id="sidebar-instances-view" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="sidebar-header">
           <h3>Configured Instances</h3>
-          <button class="btn btn-sm" onclick="openNewInstanceModal()">+ New</button>
+          <div style="display:flex; gap:6px;">
+            <button id="btn-restore-defaults" class="btn btn-sm" type="button" title="Recreate any deleted default built-in instances" onclick="restoreDefaultInstances()">↺ Defaults</button>
+            <button class="btn btn-sm" type="button" onclick="openNewInstanceModal()">+ New</button>
+          </div>
         </div>
         <div id="instance-list" class="sidebar-list"></div>
       </div>
@@ -738,28 +741,32 @@
     </aside>
   </div>
 
-  <!-- Modal: Create New Instance (From Scratch or Preset) -->
+  <!-- Modal: Create New Instance (From Scratch, Role Preset, or Built-In Default Template) -->
   <div id="modal-new-instance" class="modal-backdrop">
     <div class="modal">
       <h3>Create New MCP Instance</h3>
       <p style="color:var(--text-muted); font-size:12.5px;">
-        Start from scratch (0 tools) or base your instance on a role preset, then bind it to an environment tier.
+        Recreate a built-in default instance from its template, start from scratch (0 tools), or base your instance on a role preset.
       </p>
       <div class="form-group">
-        <label>1. Choose Starting Template</label>
+        <label>1. Built-In Default Instance Template (Optional — Recreate Deleted Default)</label>
+        <select id="new-inst-default-template" onchange="onDefaultTemplateSelect()"></select>
+      </div>
+      <div class="form-group">
+        <label>2. Role Preset (or Custom Scratch)</label>
         <select id="new-inst-preset" onchange="updateNewInstanceDefaults()"></select>
       </div>
       <div class="form-group">
-        <label>2. Target Environment Level</label>
+        <label>3. Target Environment Level</label>
         <select id="new-inst-env" onchange="updateNewInstanceDefaults()"></select>
       </div>
       <div class="form-group">
-        <label>3. Instance ID</label>
-        <input type="text" id="new-inst-id" placeholder="e.g. aem-dev-qa or aem-custom-prod" />
+        <label>4. Instance ID</label>
+        <input type="text" id="new-inst-id" placeholder="e.g. aem-dev-local or aem-custom-prod" />
       </div>
       <div class="form-group">
-        <label>4. Display Name</label>
-        <input type="text" id="new-inst-name" placeholder="e.g. AEM Developer (QA)" />
+        <label>5. Display Name</label>
+        <input type="text" id="new-inst-name" placeholder="e.g. AEM Developer (Local DEV)" />
       </div>
       <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:6px;">
         <button class="btn" onclick="closeModals()">Cancel</button>
@@ -910,7 +917,19 @@
       const container = document.getElementById('instance-list');
       container.innerHTML = '';
       const totalTools = STATE.tools.length;
-      Object.values(STATE.instances).forEach(inst => {
+      const instances = Object.values(STATE.instances);
+      if (instances.length === 0) {
+        const emptyDiv = document.createElement('div');
+        emptyDiv.style.cssText = 'padding:16px 12px; text-align:center; color:var(--text-muted); font-size:12px; display:flex; flex-direction:column; gap:10px;';
+        emptyDiv.innerHTML = `
+          <div>No MCP instances configured.</div>
+          <button class="btn btn-sm btn-primary" style="justify-content:center;" onclick="restoreDefaultInstances(true)">↺ Restore Default Instances</button>
+          <button class="btn btn-sm" style="justify-content:center;" onclick="openNewInstanceModal()">+ Create from Template</button>
+        `;
+        container.appendChild(emptyDiv);
+        return;
+      }
+      instances.forEach(inst => {
         const div = document.createElement('div');
         div.className = 'list-item' + (inst.id === activeInstanceId ? ' active' : '');
         div.onclick = () => { activeInstanceId = inst.id; renderAll(); };
@@ -982,6 +1001,32 @@
         });
         if (val) sel.value = val;
       });
+
+      const tplSel = document.getElementById('new-inst-default-template');
+      if (tplSel) {
+        const currentTpl = tplSel.value;
+        tplSel.innerHTML = '';
+        const customOpt = document.createElement('option');
+        customOpt.value = '';
+        customOpt.textContent = '— Custom Role Preset + Environment —';
+        tplSel.appendChild(customOpt);
+
+        const defaultTemplates = STATE.default_instance_templates || {};
+        const tplList = Object.values(defaultTemplates);
+        if (tplList.length > 0) {
+          const group = document.createElement('optgroup');
+          group.label = 'Built-In Default Instance Templates';
+          tplList.forEach(tpl => {
+            const exists = Boolean(STATE.instances[tpl.id]);
+            const opt = document.createElement('option');
+            opt.value = tpl.id;
+            opt.textContent = `${tpl.id} — ${tpl.name} (${tpl.allowed_tools.length} tools)${exists ? '' : ' [Deleted — Click to Recreate]'}`;
+            group.appendChild(opt);
+          });
+          tplSel.appendChild(group);
+        }
+        if (currentTpl) tplSel.value = currentTpl;
+      }
     }
 
     function renderInstanceEditor() {
@@ -1164,7 +1209,42 @@
       }
       activeInstanceId = Object.keys(STATE.instances)[0] || null;
       renderAll();
-      showToast('Instance deleted');
+      showToast('Instance deleted (can be recreated from template)');
+    }
+
+    async function restoreDefaultInstances(forceOverwrite = false) {
+      const templates = STATE.default_instance_templates || {};
+      const missingIds = Object.keys(templates).filter(id => !STATE.instances[id]);
+      const overwrite = forceOverwrite || missingIds.length === 0;
+      try {
+        const res = await fetch('/api/instances/restore-defaults', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ overwrite })
+        });
+        const data = await res.json();
+        if (data.success && data.state) {
+          STATE = data.state;
+          if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
+            activeInstanceId = Object.keys(STATE.instances)[0] || null;
+          }
+          renderAll();
+          const count = (data.restored || []).length;
+          showToast(count > 0 ? `Restored ${count} default instance(s) from template` : 'All default instances are active');
+          return;
+        }
+      } catch (e) {
+        Object.values(templates).forEach(tpl => {
+          if (overwrite || !STATE.instances[tpl.id]) {
+            STATE.instances[tpl.id] = JSON.parse(JSON.stringify(tpl));
+          }
+        });
+        if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
+          activeInstanceId = Object.keys(STATE.instances)[0] || null;
+        }
+        renderAll();
+        showToast('Restored default instances from templates');
+      }
     }
 
     function renderEnvironmentEditor() {
@@ -1314,16 +1394,44 @@
     // Modals
     function openNewInstanceModal() {
       populateSelects();
-      document.getElementById('new-inst-preset').value = 'developer';
-      document.getElementById('new-inst-env').value = 'qa';
-      updateNewInstanceDefaults();
+      const templates = STATE.default_instance_templates || {};
+      const missingTplId = Object.keys(templates).find(id => !STATE.instances[id]) || '';
+      const tplSel = document.getElementById('new-inst-default-template');
+      if (tplSel) {
+        tplSel.value = missingTplId;
+      }
+      if (missingTplId) {
+        onDefaultTemplateSelect();
+      } else {
+        document.getElementById('new-inst-preset').value = 'developer';
+        document.getElementById('new-inst-env').value = 'qa';
+        updateNewInstanceDefaults();
+      }
       document.getElementById('modal-new-instance').classList.add('open');
+    }
+
+    function onDefaultTemplateSelect() {
+      const tplSel = document.getElementById('new-inst-default-template');
+      const tplId = tplSel ? tplSel.value : '';
+      const templates = STATE.default_instance_templates || {};
+      const tpl = templates[tplId];
+      if (!tpl) {
+        updateNewInstanceDefaults();
+        return;
+      }
+      document.getElementById('new-inst-preset').value = tpl.role_preset || 'developer';
+      document.getElementById('new-inst-env').value = tpl.environment || 'dev';
+      const alreadyExists = Boolean(STATE.instances[tpl.id]);
+      document.getElementById('new-inst-id').value = alreadyExists ? `${tpl.id}-copy` : tpl.id;
+      document.getElementById('new-inst-name').value = alreadyExists ? `${tpl.name} (Copy)` : tpl.name;
     }
 
     function duplicateCurrentInstance() {
       const inst = STATE.instances[activeInstanceId];
       if (!inst) return;
       populateSelects();
+      const tplSel = document.getElementById('new-inst-default-template');
+      if (tplSel) tplSel.value = '';
       document.getElementById('new-inst-preset').value = inst.role_preset || 'developer';
       document.getElementById('new-inst-env').value = 'qa';
       document.getElementById('new-inst-id').value = `${inst.id}-copy`;
@@ -1332,6 +1440,8 @@
     }
 
     function updateNewInstanceDefaults() {
+      const tplSel = document.getElementById('new-inst-default-template');
+      if (tplSel) tplSel.value = '';
       const presetId = document.getElementById('new-inst-preset').value;
       const envId = document.getElementById('new-inst-env').value;
       const preset = STATE.presets[presetId];
@@ -1341,18 +1451,48 @@
     }
 
     async function confirmCreateInstance() {
+      const tplSel = document.getElementById('new-inst-default-template');
+      const tplId = tplSel ? tplSel.value : '';
+      const templates = STATE.default_instance_templates || {};
+      const tpl = templates[tplId];
+
       const presetId = document.getElementById('new-inst-preset').value;
       const envId = document.getElementById('new-inst-env').value;
       const id = document.getElementById('new-inst-id').value.trim().toLowerCase();
       const name = document.getElementById('new-inst-name').value.trim();
       const preset = STATE.presets[presetId] || STATE.presets.blank;
 
+      if (tpl) {
+        try {
+          const res = await fetch('/api/instances/restore-defaults', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              template_id: tplId,
+              new_id: id,
+              new_name: name,
+              environment: envId
+            })
+          });
+          const data = await res.json();
+          if (data.success) {
+            STATE = data.state;
+            activeInstanceId = data.instance.id;
+            closeModals();
+            switchSidebarTab('instances');
+            showToast(`Recreated '${activeInstanceId}' from template '${tplId}'`);
+            return;
+          }
+        } catch (e) {}
+      }
+
       const payload = {
         id,
         name,
         role_preset: presetId,
         environment: envId,
-        allowed_tools: [...preset.tools]
+        root_path_override: tpl ? (tpl.root_path_override || '') : '',
+        allowed_tools: tpl ? [...tpl.allowed_tools] : [...preset.tools]
       };
 
       try {
