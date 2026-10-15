@@ -138,6 +138,9 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             html = resp.read().decode("utf-8")
             assert "AEM MCP Configurator" in html
             assert "Batch Generate Role" in html
+            assert 'id="theme-toggle"' in html
+            assert '[data-theme="light"]' in html
+            assert "toggleTheme()" in html
 
         # 2. GET /api/state returns full state
         with urllib.request.urlopen(f"{base_url}/api/state", timeout=5) as resp:

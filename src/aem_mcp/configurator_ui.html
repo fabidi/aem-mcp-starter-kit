@@ -5,17 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AEM MCP Configurator — Instance, Role &amp; Environment Manager</title>
   <style>
-    :root {
+    :root,
+    [data-theme="dark"] {
+      color-scheme: dark;
       --bg-app: #0b0f17;
       --bg-panel: #111827;
+      --bg-subtle: #0d1320;
       --bg-card: #1a2234;
       --bg-card-hover: #212c42;
       --bg-input: #0f1523;
+      --bg-code: #080b11;
+      --bg-badge: rgba(255, 255, 255, 0.06);
       --border: #263147;
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-hover: #3b4968;
       --border-focus: #3b82f6;
       --text-main: #f3f4f6;
       --text-muted: #9ca3af;
       --text-dim: #6b7280;
+      --text-code: #d1d5db;
+      --text-tool-name: #93c5fd;
       --accent: #3b82f6;
       --accent-hover: #2563eb;
       --success: #10b981;
@@ -23,8 +32,38 @@
       --danger: #ef4444;
       --purple: #8b5cf6;
       --teal: #14b8a6;
+      --shadow-modal: 0 20px 50px rgba(0, 0, 0, 0.6);
       --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+    }
+
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg-app: #f1f5f9;
+      --bg-panel: #ffffff;
+      --bg-subtle: #f8fafc;
+      --bg-card: #f8fafc;
+      --bg-card-hover: #eef2f6;
+      --bg-input: #ffffff;
+      --bg-code: #0f172a;
+      --bg-badge: rgba(15, 23, 42, 0.06);
+      --border: #e2e8f0;
+      --border-subtle: #e2e8f0;
+      --border-hover: #cbd5e1;
+      --border-focus: #2563eb;
+      --text-main: #0f172a;
+      --text-muted: #475569;
+      --text-dim: #64748b;
+      --text-code: #e2e8f0;
+      --text-tool-name: #1d4ed8;
+      --accent: #2563eb;
+      --accent-hover: #1d4ed8;
+      --success: #059669;
+      --warning: #d97706;
+      --danger: #dc2626;
+      --purple: #7c3aed;
+      --teal: #0d9488;
+      --shadow-modal: 0 20px 45px rgba(15, 23, 42, 0.18);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -38,6 +77,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      transition: background-color 0.15s ease, color 0.15s ease;
     }
 
     /* Top Header */
@@ -102,7 +142,8 @@
       color: var(--text-main);
       transition: all 0.15s ease;
     }
-    .btn:hover { background: var(--bg-card-hover); border-color: #3b4968; }
+    .btn:hover { background: var(--bg-card-hover); border-color: var(--border-hover); }
+    .btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
     .btn-primary {
       background: var(--accent);
       border-color: var(--accent);
@@ -112,7 +153,7 @@
     .btn-danger {
       background: rgba(239, 68, 68, 0.12);
       border-color: rgba(239, 68, 68, 0.35);
-      color: #f87171;
+      color: var(--danger);
     }
     .btn-danger:hover { background: rgba(239, 68, 68, 0.22); }
     .btn-sm { padding: 4px 9px; font-size: 11.5px; }
@@ -137,7 +178,7 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       border-bottom: 1px solid var(--border);
-      background: #0d1320;
+      background: var(--bg-subtle);
     }
     .nav-tab {
       padding: 11px 12px;
@@ -178,7 +219,7 @@
       padding: 10px 12px;
       border-radius: 7px;
       background: var(--bg-card);
-      border: 1px solid transparent;
+      border: 1px solid var(--border);
       cursor: pointer;
       transition: all 0.12s ease;
     }
@@ -208,6 +249,7 @@
       color: var(--text-muted);
       font-size: 11.5px;
       font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
     }
 
     /* Environment Tier Badges */
@@ -221,11 +263,11 @@
       letter-spacing: 0.4px;
       flex-shrink: 0;
     }
-    .env-dev { background: rgba(16, 185, 129, 0.16); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); }
-    .env-int { background: rgba(20, 184, 166, 0.16); color: #2dd4bf; border: 1px solid rgba(20, 184, 166, 0.35); }
-    .env-qa  { background: rgba(59, 130, 246, 0.16); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); }
-    .env-stg { background: rgba(139, 92, 246, 0.16); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.35); }
-    .env-prod { background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .env-dev { background: rgba(16, 185, 129, 0.16); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.35); }
+    .env-int { background: rgba(20, 184, 166, 0.16); color: var(--teal); border: 1px solid rgba(20, 184, 166, 0.35); }
+    .env-qa  { background: rgba(59, 130, 246, 0.16); color: var(--accent); border: 1px solid rgba(59, 130, 246, 0.35); }
+    .env-stg { background: rgba(139, 92, 246, 0.16); color: var(--purple); border: 1px solid rgba(139, 92, 246, 0.35); }
+    .env-prod { background: rgba(239, 68, 68, 0.18); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.4); }
 
     /* Center Editor */
     .main-editor {
@@ -308,6 +350,7 @@
       font-size: 18px;
       font-weight: 700;
       font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
     }
     .stat-sub {
       font-size: 11px;
@@ -325,7 +368,7 @@
     }
     .category-header {
       padding: 12px 16px;
-      background: #141c2e;
+      background: var(--bg-subtle);
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
@@ -372,7 +415,7 @@
       font-family: var(--font-mono);
       font-weight: 600;
       font-size: 12.5px;
-      color: #93c5fd;
+      color: var(--text-tool-name);
     }
     .tool-desc {
       font-size: 11.5px;
@@ -385,23 +428,24 @@
       justify-content: space-between;
       font-size: 10.5px;
       font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
       color: var(--text-dim);
       padding-top: 4px;
-      border-top: 1px solid rgba(255,255,255,0.05);
+      border-top: 1px solid var(--border-subtle);
     }
     .tool-badge {
       padding: 1px 6px;
       border-radius: 4px;
-      background: rgba(255,255,255,0.06);
+      background: var(--bg-badge);
       color: var(--text-muted);
     }
     .tool-badge.sandbox-exec {
       background: rgba(245, 158, 11, 0.16);
-      color: #fbbf24;
+      color: var(--warning);
     }
     .tool-badge.confirm-gate {
       background: rgba(168, 85, 247, 0.18);
-      color: #c084fc;
+      color: var(--purple);
     }
 
     /* Right Config Output Panel */
@@ -431,17 +475,17 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
-      background: #0d1320;
+      background: var(--bg-subtle);
     }
     .code-container {
       flex: 1;
       overflow: auto;
       padding: 14px 16px;
-      background: #080b11;
+      background: var(--bg-code);
       font-family: var(--font-mono);
       font-size: 11.5px;
       line-height: 1.5;
-      color: #d1d5db;
+      color: var(--text-code);
       white-space: pre;
     }
 
@@ -466,7 +510,7 @@
       display: flex;
       flex-direction: column;
       gap: 14px;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+      box-shadow: var(--shadow-modal);
     }
     .modal h3 { font-size: 16px; font-weight: 700; }
     .env-checkboxes {
@@ -512,8 +556,12 @@
       </div>
     </div>
     <div class="header-actions">
-      <button class="btn" onclick="openBatchModal()">⚡ Batch Generate Across Environments</button>
-      <button class="btn btn-primary" onclick="openNewInstanceModal()">+ Create MCP Instance</button>
+      <button id="theme-toggle" class="btn" type="button" aria-label="Toggle light and dark theme" onclick="toggleTheme()">
+        <span id="theme-toggle-icon" aria-hidden="true">☀️</span>
+        <span id="theme-toggle-label">Light Mode</span>
+      </button>
+      <button class="btn" type="button" onclick="openBatchModal()">⚡ Batch Generate Across Environments</button>
+      <button class="btn btn-primary" type="button" onclick="openNewInstanceModal()">+ Create MCP Instance</button>
     </div>
   </header>
 
@@ -761,6 +809,49 @@
     let activeInstanceId = null;
     let activeEnvId = null;
     let sidebarMode = 'instances';
+    const THEME_STORAGE_KEY = 'aem_mcp_theme';
+
+    function getPreferredTheme() {
+      try {
+        const saved = localStorage.getItem(THEME_STORAGE_KEY);
+        if (saved === 'light' || saved === 'dark') return saved;
+      } catch (e) {}
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+        return 'light';
+      }
+      return 'dark';
+    }
+
+    function applyTheme(theme) {
+      const target = theme === 'light' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', target);
+      const iconEl = document.getElementById('theme-toggle-icon');
+      const labelEl = document.getElementById('theme-toggle-label');
+      const btnEl = document.getElementById('theme-toggle');
+      if (iconEl && labelEl) {
+        if (target === 'light') {
+          iconEl.textContent = '🌙';
+          labelEl.textContent = 'Dark Mode';
+        } else {
+          iconEl.textContent = '☀️';
+          labelEl.textContent = 'Light Mode';
+        }
+      }
+      if (btnEl) {
+        btnEl.setAttribute('aria-pressed', target === 'light' ? 'true' : 'false');
+      }
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'dark';
+      const next = current === 'dark' ? 'light' : 'dark';
+      applyTheme(next);
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, next);
+      } catch (e) {}
+    }
+
+    applyTheme(getPreferredTheme());
 
     async function loadState() {
       try {
@@ -925,7 +1016,7 @@
       const hasSandbox = allowedSet.has('execute_code');
       const sbEl = document.getElementById('stat-sandbox');
       sbEl.textContent = hasSandbox ? 'Authorized' : 'Disabled';
-      sbEl.style.color = hasSandbox ? '#fbbf24' : '#34d399';
+      sbEl.style.color = hasSandbox ? 'var(--warning)' : 'var(--success)';
       document.getElementById('stat-sandbox-sub').textContent = hasSandbox ? 'AST + timeout guarded' : 'Strict read-only mode';
 
       // Render categories
