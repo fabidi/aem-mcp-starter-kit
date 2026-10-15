@@ -48,11 +48,12 @@ _GROUP_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,127}$")
 _VERSION_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$")
 
 # Allowed JCR Root Types and their minimum required segment depth
-# (e.g. '/content/novaria' has 2 segments; '/content/dam/novaria' has 3 segments)
+# (e.g. '/content/novaria', '/apps/novaria', '/libs/wcm' have 2 segments; '/content/dam/novaria' has 3 segments)
 ALLOWED_PACKAGE_ROOT_TYPES: tuple[str, ...] = (
     "/content",
     "/conf",
     "/apps",
+    "/libs",
     "/etc/designs",
     "/var/workflow/models",
 )
@@ -73,7 +74,6 @@ _DEPTH_3_CONTAINERS: set[str] = {
 
 _FORBIDDEN_FILTER_ROOTS: set[str] = {
     "/",
-    "/libs",
     "/etc",
     "/etc/packages",
     "/system",
@@ -121,15 +121,16 @@ def validate_package_coordinates(group: str, name: str, version: str) -> dict[st
     }
 
 
-def validate_single_filter_root(raw_path: str) -> str:
+def validate_single_filter_root(raw_path: str, allow_libs: bool = True) -> str:
     """
     Enforce path guardrails on a single repository filter root:
     1. Must be a clean absolute path starting with '/'.
-    2. Never allow '/libs' or any '/libs/*' subpath (immutable AEM product tree).
+    2. When allow_libs=False (e.g. during package_install), strictly block '/libs' and '/libs/*'
+       so immutable AEM product code can never be overwritten.
     3. Never allow '/', '/etc/packages', '/system', '/oak:index', etc.
-    4. Must belong to an allowed root type (/content, /conf, /apps, /etc/designs, /var/workflow/models).
-    5. Cannot go above the minimum path depth ceiling (e.g. '/content', '/conf', '/apps', or '/content/dam'
-       without a tenant/project folder are blocked).
+    4. Must belong to an allowed root type (/content, /conf, /apps, /libs, /etc/designs, /var/workflow/models).
+    5. Cannot go above the minimum path depth ceiling (e.g. '/content', '/conf', '/apps', '/libs', or '/content/dam'
+       without a specific child subtree are blocked).
     """
     raw_root = (raw_path or "").strip()
     if not raw_root:
@@ -141,11 +142,11 @@ def validate_single_filter_root(raw_path: str) -> str:
     if ".." in raw_root.split("/") or "//" in raw_root or any(c.isspace() for c in raw_root):
         raise ValueError(f"Unsafe or malformed repository filter path '{raw_root}'.")
 
-    # Guardrail 1: Explicit /libs prohibition (never package or install into /libs)
-    if raw_root == "/libs" or raw_root.startswith("/libs/"):
+    # Guardrail 1: Block /libs when installing (allow_libs=False) so /libs is never overwritten
+    if not allow_libs and (raw_root == "/libs" or raw_root.startswith("/libs/")):
         raise ValueError(
-            f"Filter root '{raw_root}' is forbidden: '/libs' is immutable AEM product code. "
-            "Packages must never target or install into '/libs'."
+            f"Security guardrail violation: Filter root '{raw_root}' targets '/libs'. "
+            "Installing into '/libs' is strictly forbidden to prevent overwriting immutable AEM product code."
         )
 
     # Guardrail 2: Explicit forbidden system/package roots
@@ -178,7 +179,7 @@ def validate_single_filter_root(raw_path: str) -> str:
         container = "/" + "/".join(segments[:2])
         example = f"{container}/<project>"
     else:
-        min_segments = 2  # e.g. /content/<site>, /conf/<site>, /apps/<project>
+        min_segments = 2  # e.g. /content/<site>, /conf/<site>, /apps/<project>, /libs/<module>
         top = "/" + segments[0]
         example = f"{top}/<project>"
 
@@ -192,10 +193,14 @@ def validate_single_filter_root(raw_path: str) -> str:
     return raw_root
 
 
-def validate_package_filters(filters: list[str | dict[str, Any]]) -> list[dict[str, Any]]:
+def validate_package_filters(
+    filters: list[str | dict[str, Any]],
+    allow_libs: bool = True,
+) -> list[dict[str, Any]]:
     """
     Validate and normalize a list of repository filter roots.
-    Enforces allowed root types, minimum depth ceilings, duplicate detection, and '/libs' prohibition.
+    Enforces allowed root types (/content, /conf, /apps, /libs, /etc/designs, /var/workflow/models),
+    minimum depth ceilings, duplicate detection, and (when allow_libs=False) strict '/libs' install prohibition.
     """
     if not isinstance(filters, list) or len(filters) == 0:
         raise ValueError("At least one repository filter root must be provided.")
@@ -214,7 +219,7 @@ def validate_package_filters(filters: list[str | dict[str, Any]]) -> list[dict[s
         else:
             raise ValueError(f"Invalid filter entry '{item}'. Must be a path string or {{'root': '/path', 'rules': []}}.")
 
-        clean_root = validate_single_filter_root(raw_root)
+        clean_root = validate_single_filter_root(raw_root, allow_libs=allow_libs)
 
         if clean_root in seen_roots:
             raise ValueError(f"Duplicate filter root '{clean_root}' is not allowed.")
@@ -238,13 +243,15 @@ def inspect_and_validate_package_zip(
     zip_bytes: bytes,
     max_bytes: int = MAX_PACKAGE_BYTES,
     max_nodes: int = MAX_PACKAGE_NODES,
+    allow_libs: bool = True,
 ) -> dict[str, Any]:
     """
-    Deep in-code guardrail inspection for CRX package archives before download staging, upload, or installation:
+    Deep in-code guardrail inspection for CRX package archives:
     1. Enforces the 100 MB compressed AND uncompressed byte size limit.
     2. Enforces the 10,000 JCR node / entry count limit.
     3. Scans META-INF/vault/filter.xml, jcr_root/* archive entries, and _jcr_snapshot.json to guarantee
-       the package NEVER targets or installs into '/libs' or violates path depth/type guardrails.
+       valid root types and minimum path depth ceilings, and when allow_libs=False (during package_install)
+       strictly blocks any '/libs' entries so '/libs' can never be overwritten.
     """
     if len(zip_bytes) > max_bytes:
         raise ValueError(
@@ -272,21 +279,22 @@ def inspect_and_validate_package_zip(
                 f"(maximum allowed is {max_nodes:,})."
             )
 
-        # Check every jcr_root/ entry path inside the ZIP for /libs or forbidden targets
-        for entry_name in names:
-            norm_entry = entry_name.replace("\\", "/").lstrip("/")
-            if norm_entry == "jcr_root/libs" or norm_entry.startswith("jcr_root/libs/"):
-                raise ValueError(
-                    f"Security guardrail violation: Package archive contains '{entry_name}'. "
-                    "Installing into '/libs' is strictly forbidden."
-                )
+        # When allow_libs=False (install_package), block any jcr_root/libs/ entry in the ZIP
+        if not allow_libs:
+            for entry_name in names:
+                norm_entry = entry_name.replace("\\", "/").lstrip("/")
+                if norm_entry == "jcr_root/libs" or norm_entry.startswith("jcr_root/libs/"):
+                    raise ValueError(
+                        f"Security guardrail violation: Package archive contains '{entry_name}'. "
+                        "Installing into '/libs' is strictly forbidden."
+                    )
 
         # Inspect META-INF/vault/filter.xml if present
         if "META-INF/vault/filter.xml" in names:
             filter_xml = zf.read("META-INF/vault/filter.xml").decode("utf-8", errors="replace")
             roots_in_xml = re.findall(r'<filter\s+[^>]*root=["\']([^"\']+)["\']', filter_xml)
             if roots_in_xml:
-                validate_package_filters(roots_in_xml)
+                validate_package_filters(roots_in_xml, allow_libs=allow_libs)
 
         # Inspect simulated JCR node snapshot if present
         node_count = len(names)
@@ -300,12 +308,12 @@ def inspect_and_validate_package_zip(
                         f"(maximum allowed is {max_nodes:,} nodes)."
                     )
                 for node_path in snapshot.keys():
-                    if node_path == "/libs" or node_path.startswith("/libs/"):
+                    if not allow_libs and (node_path == "/libs" or node_path.startswith("/libs/")):
                         raise ValueError(
                             f"Security guardrail violation: Package contains JCR node '{node_path}'. "
                             "Installing into '/libs' is strictly forbidden."
                         )
-                    validate_single_filter_root(node_path)
+                    validate_single_filter_root(node_path, allow_libs=allow_libs)
 
     return {
         "compressed_bytes": len(zip_bytes),
@@ -476,9 +484,8 @@ class PackageManagerEngine:
         filters: list[dict[str, Any]],
     ) -> dict[str, Any]:
         """
-        Collect JCR nodes matching the package filters from the simulator and enforce:
-        1. Hard '/libs' prohibition on matched nodes.
-        2. Node count guardrail (<= self.max_nodes, default 10,000 nodes).
+        Collect JCR nodes matching the package filters from the simulator and enforce
+        the node count guardrail (<= self.max_nodes, default 10,000 nodes).
         """
         captured_nodes: dict[str, Any] = {}
         all_nodes = getattr(simulator, "all_nodes", {}) if simulator is not None else {}
@@ -487,18 +494,8 @@ class PackageManagerEngine:
 
         for flt in filters:
             root = flt["root"]
-            if root == "/libs" or root.startswith("/libs/"):
-                raise ValueError(
-                    f"Security guardrail violation: Filter root '{root}' targets '/libs'. "
-                    "Packaging or installing into '/libs' is strictly forbidden."
-                )
             for node_path, node_data in all_nodes.items():
                 if node_path == root or node_path.startswith(root + "/"):
-                    if node_path == "/libs" or node_path.startswith("/libs/"):
-                        raise ValueError(
-                            f"Security guardrail violation: Matched node '{node_path}' is inside '/libs'. "
-                            "Packaging or installing into '/libs' is strictly forbidden."
-                        )
                     captured_nodes[node_path] = node_data
 
         if len(captured_nodes) > self.max_nodes:
@@ -1062,8 +1059,9 @@ class PackageManagerEngine:
         """
         Install an uploaded or built package into the active MCP instance's AEM repository.
         Requires confirm=True.
-        CRITICAL GUARDRAIL: Never install into '/libs'. Validates filters, ZIP archive entries,
-        and extracted JCR node paths to block '/libs', invalid roots, >100MB archives, and >10,000 nodes.
+        CRITICAL GUARDRAIL: Never install into '/libs' (to prevent overwriting immutable AEM product code).
+        Validates filters, ZIP archive entries, and extracted JCR node paths with allow_libs=False
+        to block '/libs', invalid roots, >100MB archives, and >10,000 nodes.
         """
         target_env = env_id or self._active_env_id()
         coords = validate_package_coordinates(group=group, name=name, version=version)
@@ -1076,13 +1074,35 @@ class PackageManagerEngine:
             if pkg_pre:
                 pre_filters = pkg_pre.get("filters") or []
                 if pre_filters:
-                    validate_package_filters(pre_filters)
+                    validate_package_filters(pre_filters, allow_libs=False)
                 if pkg_pre.get("mock_zip_path") and Path(pkg_pre["mock_zip_path"]).exists():
                     inspect_and_validate_package_zip(
                         Path(pkg_pre["mock_zip_path"]).read_bytes(),
                         max_bytes=self.max_package_bytes,
                         max_nodes=self.max_nodes,
+                        allow_libs=False,
                     )
+
+        # Also check any matching staged package in exchange_dir (applies to both mock and live mode)
+        if self.exchange_dir.exists():
+            for meta_file in self.exchange_dir.glob("pkg_*.json"):
+                try:
+                    meta_data = json.loads(meta_file.read_text(encoding="utf-8"))
+                    if meta_data.get("package_path") == coords["package_path"]:
+                        if meta_data.get("filters"):
+                            validate_package_filters(meta_data["filters"], allow_libs=False)
+                        staged_zip = self.exchange_dir / f"{meta_data['package_handle']}.zip"
+                        if staged_zip.exists():
+                            inspect_and_validate_package_zip(
+                                staged_zip.read_bytes(),
+                                max_bytes=self.max_package_bytes,
+                                max_nodes=self.max_nodes,
+                                allow_libs=False,
+                            )
+                except ValueError:
+                    raise
+                except Exception:
+                    continue
 
         preview = {
             "package_path": coords["package_path"],
@@ -1104,13 +1124,14 @@ class PackageManagerEngine:
                 )
             pkg_filters = pkg.get("filters") or []
             if pkg_filters:
-                validate_package_filters(pkg_filters)
+                validate_package_filters(pkg_filters, allow_libs=False)
 
             zip_bytes = Path(pkg["mock_zip_path"]).read_bytes()
             inspect_and_validate_package_zip(
                 zip_bytes,
                 max_bytes=self.max_package_bytes,
                 max_nodes=self.max_nodes,
+                allow_libs=False,
             )
             installed_nodes = _extract_nodes_from_mock_crx_zip(zip_bytes)
 
@@ -1125,7 +1146,7 @@ class PackageManagerEngine:
                         f"Security guardrail violation: Refusing to install node '{node_path}'. "
                         "Installing into '/libs' is strictly forbidden."
                     )
-                validate_single_filter_root(node_path)
+                validate_single_filter_root(node_path, allow_libs=False)
 
             if simulator is not None and hasattr(simulator, "all_nodes"):
                 simulator.all_nodes.update(installed_nodes)
@@ -1144,8 +1165,6 @@ class PackageManagerEngine:
                 "filters": pkg.get("filters", []),
             }
 
-        # In live/HTTP mode, verify the remote package archive before issuing ?cmd=install
-        # if a staged exchange copy or downloadable package is reachable, or inspect via download
         raw = self._send_live_http(
             install_req["method"],
             install_req["url"],

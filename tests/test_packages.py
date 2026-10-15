@@ -315,58 +315,105 @@ def test_live_mode_http_dispatch_for_package_lifecycle(tmp_path: Path, monkeypat
     assert recorded_calls[-1]["url"].endswith("/crx/packmgr/service/.json/etc/packages/my_packages/live-pkg-1.0.zip?cmd=install")
 
 
-def test_guardrail_never_package_or_install_into_libs(tmp_path: Path):
+def test_guardrail_allow_creating_package_from_libs_but_never_install_into_libs(tmp_path: Path):
     """
-    Verify hard '/libs' prohibition across filter validation, package creation,
-    archive inspection, upload, and installation (Never install into /libs).
+    Verify that:
+    1. Creating, building, downloading, and uploading a package from '/libs/<subpath>' (e.g. '/libs/wcm/core')
+       IS allowed (while bare '/libs' is rejected by the minimum path depth ceiling).
+    2. Installing ('install_package') any package that contains '/libs' filters, 'jcr_root/libs/...' entries,
+       or '/libs/...' JCR nodes is STRICTLY FORBIDDEN so '/libs' can never be overwritten.
     """
-    # 1. Filter validation blocks /libs and any subpath under /libs
-    for libs_path in ["/libs", "/libs/", "/libs/wcm/core", "/libs/granite/ui/components/coral"]:
-        with pytest.raises(ValueError, match="never target or install into '/libs'"):
-            validate_package_filters([libs_path])
+    # 1. Bare '/libs' is blocked by the minimum path depth ceiling (requires >= 2 segments)
+    with pytest.raises(ValueError, match="above the minimum allowed path depth ceiling"):
+        validate_package_filters(["/libs"])
+
+    # 2. Specific '/libs/<subpath>' is allowed for package creation, building, downloading, and uploading
+    valid_libs_filters = validate_package_filters(["/libs/wcm/core", "/libs/granite/ui/components/coral"])
+    assert [f["root"] for f in valid_libs_filters] == [
+        "/libs/wcm/core",
+        "/libs/granite/ui/components/coral",
+    ]
+
+    class DummySim:
+        def __init__(self, nodes: dict[str, Any] | None = None):
+            self.all_nodes: dict[str, Any] = nodes or {}
+
+    source_sim = DummySim({
+        "/libs/wcm/core/content/editor": {"jcr:primaryType": "cq:Page"},
+    })
+    target_sim = DummySim({
+        "/libs/wcm/core/content/editor": {"jcr:primaryType": "cq:Page", "immutable": True},
+    })
 
     engine = PackageManagerEngine(
         exchange_dir=tmp_path / "exchange",
         mock_state_dir=tmp_path / "mock_state",
     )
 
-    # 2. create_package and set_filters reject /libs filters
-    with pytest.raises(ValueError, match="never target or install into '/libs'"):
-        engine.create_package(
-            name="bad-libs-pkg",
+    # Create, build, download, and upload a '/libs/wcm/core' package succeeds
+    create_res = engine.create_package(
+        name="libs-wcm-read",
+        group="my_packages",
+        version="1.0",
+        filters=["/libs/wcm/core"],
+        confirm=True,
+        env_id="int",
+        simulator=source_sim,
+    )
+    assert create_res["status"] == "created"
+
+    build_res = engine.build_package(
+        name="libs-wcm-read",
+        group="my_packages",
+        version="1.0",
+        confirm=True,
+        env_id="int",
+        simulator=source_sim,
+    )
+    assert build_res["status"] == "built"
+    assert build_res["node_count"] == 1
+
+    dl_res = engine.download_package(
+        name="libs-wcm-read",
+        group="my_packages",
+        version="1.0",
+        env_id="int",
+    )
+    assert dl_res["status"] == "downloaded_to_exchange"
+
+    up_res = engine.upload_package(
+        package_handle=dl_res["package_handle"],
+        confirm=True,
+        env_id="dev",
+    )
+    assert up_res["status"] == "uploaded"
+
+    # 3. Attempting to INSTALL a package targeting '/libs/...' is strictly forbidden (even before confirm=True!)
+    with pytest.raises(ValueError, match="Installing into '/libs' is strictly forbidden"):
+        engine.install_package(
+            name="libs-wcm-read",
             group="my_packages",
             version="1.0",
-            filters=["/libs/wcm/core"],
-            confirm=True,
+            confirm=False,
+            env_id="dev",
+            simulator=target_sim,
         )
-
-    # 3. Even if an external or tampered ZIP archive in exchange storage contains:
-    #    (a) jcr_root/libs/... entry,
-    #    (b) <filter root="/libs/..."/> in META-INF/vault/filter.xml, or
-    #    (c) a '/libs/...' node in _jcr_snapshot.json,
-    #    both upload_package and install_package MUST refuse it!
-    exchange_dir = tmp_path / "exchange"
-    exchange_dir.mkdir(parents=True, exist_ok=True)
-    handle = "pkg_aabbccddeeff"
-
-    # Case A: ZIP entry under jcr_root/libs/
-    buf_a = io.BytesIO()
-    with zipfile.ZipFile(buf_a, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        zf.writestr(
-            "META-INF/vault/filter.xml",
-            '<?xml version="1.0" encoding="UTF-8"?><workspaceFilter version="1.0"><filter root="/apps/novaria"/></workspaceFilter>',
-        )
-        zf.writestr("jcr_root/libs/wcm/core/.content.xml", "<jcr:root/>")
-    (exchange_dir / f"{handle}.zip").write_bytes(buf_a.getvalue())
-    (exchange_dir / f"{handle}.json").write_text(
-        json.dumps({"package_handle": handle, "group": "my_packages", "name": "tampered", "version": "1.0"}),
-        encoding="utf-8",
-    )
 
     with pytest.raises(ValueError, match="Installing into '/libs' is strictly forbidden"):
-        engine.upload_package(package_handle=handle, confirm=True, env_id="dev")
+        engine.install_package(
+            name="libs-wcm-read",
+            group="my_packages",
+            version="1.0",
+            confirm=True,
+            env_id="dev",
+            simulator=target_sim,
+        )
 
-    # Case B: _jcr_snapshot.json contains a /libs node on install_package
+    # Verify target_sim '/libs' node was NOT overwritten
+    assert target_sim.all_nodes["/libs/wcm/core/content/editor"]["immutable"] is True
+
+    # 4. Even if a package claims its filter is '/apps/novaria', if the ZIP archive contains
+    #    'jcr_root/libs/...' or a '/libs/...' node in '_jcr_snapshot.json', install_package MUST refuse it!
     mock_state_dir = tmp_path / "mock_state"
     mock_state_dir.mkdir(parents=True, exist_ok=True)
     bad_zip_path = mock_state_dir / "dev_tampered_1.0.zip"
@@ -376,10 +423,7 @@ def test_guardrail_never_package_or_install_into_libs(tmp_path: Path):
             "META-INF/vault/filter.xml",
             '<?xml version="1.0" encoding="UTF-8"?><workspaceFilter version="1.0"><filter root="/apps/novaria"/></workspaceFilter>',
         )
-        zf.writestr(
-            "jcr_root/_jcr_snapshot.json",
-            json.dumps({"/libs/wcm/core/content": {"jcr:primaryType": "nt:unstructured"}}),
-        )
+        zf.writestr("jcr_root/libs/wcm/core/.content.xml", "<jcr:root/>")
     bad_zip_path.write_bytes(buf_b.getvalue())
 
     engine._save_mock_packages(
@@ -397,27 +441,29 @@ def test_guardrail_never_package_or_install_into_libs(tmp_path: Path):
         },
     )
 
-    class DummySim:
-        def __init__(self):
-            self.all_nodes: dict[str, Any] = {}
-
-    sim = DummySim()
     with pytest.raises(ValueError, match="Installing into '/libs' is strictly forbidden"):
-        engine.install_package(name="tampered", group="my_packages", version="1.0", confirm=True, env_id="dev", simulator=sim)
-    assert "/libs/wcm/core/content" not in sim.all_nodes
+        engine.install_package(
+            name="tampered",
+            group="my_packages",
+            version="1.0",
+            confirm=True,
+            env_id="dev",
+            simulator=target_sim,
+        )
 
 
 def test_guardrail_allowed_root_types_and_minimum_path_depth_ceiling():
     """
     Verify that package filter paths:
-    1. Are restricted to ALLOWED_PACKAGE_ROOT_TYPES (/content, /conf, /apps, /etc/designs, /var/workflow/models).
-    2. Cannot go above the minimum path depth ceiling (e.g., /content, /conf, /apps, /content/dam,
+    1. Are restricted to ALLOWED_PACKAGE_ROOT_TYPES (/content, /conf, /apps, /libs, /etc/designs, /var/workflow/models).
+    2. Cannot go above the minimum path depth ceiling (e.g., /content, /conf, /apps, /libs, /content/dam,
        /content/experience-fragments without a project/site child segment are blocked).
     """
     assert ALLOWED_PACKAGE_ROOT_TYPES == (
         "/content",
         "/conf",
         "/apps",
+        "/libs",
         "/etc/designs",
         "/var/workflow/models",
     )
@@ -438,6 +484,7 @@ def test_guardrail_allowed_root_types_and_minimum_path_depth_ceiling():
         "/content",
         "/conf",
         "/apps",
+        "/libs",
         "/content/dam",
         "/content/experience-fragments",
         "/content/campaigns",
@@ -449,7 +496,7 @@ def test_guardrail_allowed_root_types_and_minimum_path_depth_ceiling():
         with pytest.raises(ValueError, match="above the minimum allowed path depth ceiling"):
             validate_package_filters([too_broad])
 
-    # 3. Valid project/site-scoped paths at or below required depth succeed
+    # 3. Valid project/site/module-scoped paths at or below required depth succeed
     valid_paths = [
         "/content/novaria",
         "/content/novaria/us/en",
@@ -457,6 +504,7 @@ def test_guardrail_allowed_root_types_and_minimum_path_depth_ceiling():
         "/content/experience-fragments/novaria/us/en",
         "/conf/novaria/settings/wcm/templates",
         "/apps/novaria/components",
+        "/libs/wcm/core",
         "/etc/designs/novaria",
         "/var/workflow/models/novaria-publish-review",
     ]

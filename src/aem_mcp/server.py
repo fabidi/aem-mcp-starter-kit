@@ -965,7 +965,7 @@ def package_create(
     Create an empty CRX package definition in the active environment and optionally configure repository filter roots.
     Requires explicit confirmation (confirm=True).
     Enforces guardrails: 100 MB size limit, 10,000 node limit, allowed root types (/content, /conf, /apps,
-    /etc/designs, /var/workflow/models), minimum path depth ceiling, and strict '/libs' prohibition.
+    /libs, /etc/designs, /var/workflow/models), and minimum path depth ceiling.
     """
     res = PACKAGE_MANAGER.create_package(
         name=name,
@@ -989,7 +989,8 @@ def package_set_filters(
 ) -> str:
     """
     Replace repository filter roots on an existing CRX package definition via /crx/packmgr/update.jsp.
-    Validates allowed root types, minimum path depth ceiling, 10,000 node limit, and strict '/libs' prohibition.
+    Validates allowed root types (/content, /conf, /apps, /libs, /etc/designs, /var/workflow/models),
+    minimum path depth ceiling, and 10,000 node limit.
     Requires explicit confirmation (confirm=True).
     """
     res = PACKAGE_MANAGER.set_filters(
@@ -1036,7 +1037,7 @@ def package_download(
     """
     Read-only: Download a built CRX package from the active environment into MCP-managed private exchange storage
     and return an opaque package_handle (pkg_<12hex>). Package bytes are never loaded into model context.
-    Enforces 100 MB size limit, 10,000 node limit, and '/libs' prohibition.
+    Enforces 100 MB size limit, 10,000 node limit, and filter path depth/root type guardrails.
     """
     res = PACKAGE_MANAGER.download_package(
         name=name,
@@ -1056,7 +1057,7 @@ def package_upload(
     """
     Upload a package from MCP-managed private exchange storage (by opaque package_handle)
     into the active MCP instance's AEM environment.
-    Enforces 100 MB size limit, 10,000 node limit, and strict '/libs' prohibition before uploading.
+    Enforces 100 MB size limit, 10,000 node limit, and filter path depth/root type guardrails.
     Requires explicit confirmation (confirm=True).
     """
     res = PACKAGE_MANAGER.upload_package(
@@ -1077,8 +1078,9 @@ def package_install(
 ) -> str:
     """
     Install an uploaded or built CRX package in the active MCP instance's AEM environment.
-    CRITICAL GUARDRAIL: Never install into '/libs'. Enforces 100 MB size limit, 10,000 node limit,
-    and path depth/root type restrictions before installation. Requires explicit confirmation (confirm=True).
+    CRITICAL GUARDRAIL: Never install into '/libs' (prevents overwriting immutable AEM product code).
+    Enforces 100 MB size limit, 10,000 node limit, and path depth/root type restrictions before installation.
+    Requires explicit confirmation (confirm=True).
     """
     res = PACKAGE_MANAGER.install_package(
         name=name,
