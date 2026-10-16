@@ -222,6 +222,37 @@
       border: 1px solid var(--border);
       cursor: pointer;
       transition: all 0.12s ease;
+      position: relative;
+    }
+    .list-item[draggable="true"] {
+      cursor: grab;
+    }
+    .list-item[draggable="true"]:active {
+      cursor: grabbing;
+    }
+    .list-item.dragging {
+      opacity: 0.42;
+      border-style: dashed;
+      border-color: var(--accent);
+    }
+    .list-item.drag-over-top {
+      box-shadow: inset 0 3px 0 0 var(--accent);
+    }
+    .list-item.drag-over-bottom {
+      box-shadow: inset 0 -3px 0 0 var(--accent);
+    }
+    .drag-handle {
+      color: var(--text-dim);
+      font-size: 12px;
+      line-height: 1;
+      letter-spacing: -1px;
+      cursor: grab;
+      user-select: none;
+      flex-shrink: 0;
+      padding-right: 2px;
+    }
+    .list-item:hover .drag-handle {
+      color: var(--text-muted);
     }
     .list-item:hover { background: var(--bg-card-hover); }
     .list-item.active {
@@ -269,13 +300,36 @@
     .env-stg { background: rgba(139, 92, 246, 0.16); color: var(--purple); border: 1px solid rgba(139, 92, 246, 0.35); }
     .env-prod { background: rgba(239, 68, 68, 0.18); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.4); }
 
-    /* Center Editor */
+    /* Center Editor (Details Panel) */
     .main-editor {
       display: flex;
       flex-direction: column;
       overflow-y: auto;
-      padding: 20px 24px;
-      gap: 18px;
+      padding: 0 24px 20px 24px;
+      gap: 16px;
+    }
+    .main-panel-header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      margin: 0 -24px;
+      padding: 14px 24px;
+      background: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .main-panel-header h3 {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 2px;
+    }
+    .main-panel-header p {
+      font-size: 11.5px;
+      color: var(--text-muted);
     }
     .card {
       background: var(--bg-panel);
@@ -781,8 +835,15 @@
       </div>
     </aside>
 
-    <!-- Center Workspace -->
+    <!-- Center Workspace (Details Panel) -->
     <main class="main-editor">
+      <div class="main-panel-header">
+        <div>
+          <h3 id="main-panel-title">Details</h3>
+          <p id="main-panel-subtitle">Configure instance settings, environment binding, and authorized tool categories</p>
+        </div>
+      </div>
+
       <!-- Instance Editor View -->
       <div id="editor-instance-view">
         <div class="card" style="margin-bottom: 16px;">
@@ -1033,7 +1094,9 @@
     let expandedCategories = new Set();
     let filterOverrideCollapsed = new Set();
     let toolFilterQuery = '';
+    let draggedInstanceId = null;
     const THEME_STORAGE_KEY = 'aem_mcp_theme';
+    const INSTANCE_ORDER_STORAGE_KEY = 'aem_mcp_instance_order';
 
     function getPreferredTheme() {
       try {
@@ -1077,6 +1140,56 @@
 
     applyTheme(getPreferredTheme());
 
+    function applyStoredInstanceOrder() {
+      if (!STATE || !STATE.instances) return;
+      try {
+        const raw = localStorage.getItem(INSTANCE_ORDER_STORAGE_KEY);
+        if (!raw) return;
+        const savedOrder = JSON.parse(raw);
+        if (!Array.isArray(savedOrder) || savedOrder.length === 0) return;
+        const reordered = {};
+        savedOrder.forEach(id => {
+          if (STATE.instances[id]) reordered[id] = STATE.instances[id];
+        });
+        Object.keys(STATE.instances).forEach(id => {
+          if (!reordered[id]) reordered[id] = STATE.instances[id];
+        });
+        STATE.instances = reordered;
+      } catch (e) {}
+    }
+
+    async function reorderInstances(orderedIds) {
+      if (!STATE || !STATE.instances || !Array.isArray(orderedIds)) return;
+      const reordered = {};
+      orderedIds.forEach(id => {
+        if (STATE.instances[id]) reordered[id] = STATE.instances[id];
+      });
+      Object.keys(STATE.instances).forEach(id => {
+        if (!reordered[id]) reordered[id] = STATE.instances[id];
+      });
+      STATE.instances = reordered;
+      const finalOrder = Object.keys(STATE.instances);
+      try {
+        localStorage.setItem(INSTANCE_ORDER_STORAGE_KEY, JSON.stringify(finalOrder));
+      } catch (e) {}
+      renderSidebarInstances();
+      renderExportConfig();
+      try {
+        const res = await fetch('/api/instances/reorder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ordered_ids: finalOrder })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.state) {
+            STATE = { ...STATE, ...data.state };
+          }
+        }
+      } catch (e) {}
+      showToast('Reordered MCP instances');
+    }
+
     async function loadState() {
       try {
         const res = await fetch('/api/state');
@@ -1087,6 +1200,7 @@
         console.warn('Running in standalone preview mode.');
       }
       if (!STATE) return;
+      applyStoredInstanceOrder();
       const instKeys = Object.keys(STATE.instances);
       if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
         activeInstanceId = instKeys[0] || null;
@@ -1115,10 +1229,17 @@
       document.getElementById('sidebar-environments-view').style.display = mode === 'environments' ? 'flex' : 'none';
       document.getElementById('editor-instance-view').style.display = mode === 'instances' ? 'block' : 'none';
       document.getElementById('editor-environment-view').style.display = mode === 'environments' ? 'block' : 'none';
+      const subtitle = document.getElementById('main-panel-subtitle');
+      if (subtitle) {
+        subtitle.textContent = mode === 'instances'
+          ? 'Configure instance settings, environment binding, and authorized tool categories'
+          : 'Configure target AEM connection mode, URL, and environment defaults';
+      }
       renderAll();
     }
 
     function renderAll() {
+      applyStoredInstanceOrder();
       renderSidebarInstances();
       renderSidebarEnvironments();
       populateSelects();
@@ -1149,11 +1270,58 @@
       instances.forEach(inst => {
         const div = document.createElement('div');
         div.className = 'list-item' + (inst.id === activeInstanceId ? ' active' : '');
+        div.draggable = true;
+        div.setAttribute('data-instance-id', inst.id);
         div.onclick = () => { activeInstanceId = inst.id; renderAll(); };
+
+        div.ondragstart = (e) => {
+          draggedInstanceId = inst.id;
+          e.dataTransfer.effectAllowed = 'move';
+          try { e.dataTransfer.setData('text/plain', inst.id); } catch (err) {}
+          requestAnimationFrame(() => div.classList.add('dragging'));
+        };
+        div.ondragover = (e) => {
+          e.preventDefault();
+          if (!draggedInstanceId || draggedInstanceId === inst.id) return;
+          e.dataTransfer.dropEffect = 'move';
+          const rect = div.getBoundingClientRect();
+          const dropAfter = (e.clientY - rect.top) > (rect.height / 2);
+          div.classList.toggle('drag-over-top', !dropAfter);
+          div.classList.toggle('drag-over-bottom', dropAfter);
+        };
+        div.ondragleave = () => {
+          div.classList.remove('drag-over-top', 'drag-over-bottom');
+        };
+        div.ondragend = () => {
+          draggedInstanceId = null;
+          container.querySelectorAll('.list-item').forEach(el => {
+            el.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom');
+          });
+        };
+        div.ondrop = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const sourceId = draggedInstanceId || (e.dataTransfer && e.dataTransfer.getData('text/plain'));
+          div.classList.remove('drag-over-top', 'drag-over-bottom');
+          if (!sourceId || sourceId === inst.id) return;
+          const rect = div.getBoundingClientRect();
+          const dropAfter = (e.clientY - rect.top) > (rect.height / 2);
+          const currentIds = Object.keys(STATE.instances).filter(id => id !== sourceId);
+          const targetIdx = currentIds.indexOf(inst.id);
+          if (targetIdx === -1) return;
+          const insertIdx = dropAfter ? targetIdx + 1 : targetIdx;
+          currentIds.splice(insertIdx, 0, sourceId);
+          draggedInstanceId = null;
+          reorderInstances(currentIds);
+        };
+
         const count = (inst.allowed_tools || []).length;
         div.innerHTML = `
           <div class="list-item-top">
-            <span class="list-item-title">${inst.name}</span>
+            <div style="display:flex; align-items:center; gap:6px; min-width:0;">
+              <span class="drag-handle" title="Drag to reorder instance" aria-hidden="true">⋮⋮</span>
+              <span class="list-item-title">${inst.name}</span>
+            </div>
             <span class="${envBadgeClass(inst.environment)}">${inst.environment}</span>
           </div>
           <div class="list-item-sub">

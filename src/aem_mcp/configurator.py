@@ -744,6 +744,23 @@ class ConfiguratorStore:
         self.save()
         return True
 
+    def reorder_instances(self, ordered_ids: list[str]) -> list[str]:
+        """
+        Reorder configured MCP instances according to ordered_ids while preserving any
+        instances not explicitly listed at the end.
+        """
+        reordered: dict[str, dict[str, Any]] = {}
+        for raw_id in ordered_ids:
+            clean_id = str(raw_id).strip().lower()
+            if clean_id in self.instances and clean_id not in reordered:
+                reordered[clean_id] = self.instances[clean_id]
+        for k, v in self.instances.items():
+            if k not in reordered:
+                reordered[k] = v
+        self.instances = reordered
+        self.save()
+        return list(self.instances.keys())
+
     def recreate_from_default_template(
         self,
         template_id: str,
@@ -1010,6 +1027,17 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
                 if path == "/api/instances/delete":
                     deleted = active_store.delete_instance(str(body.get("id", "")))
                     self._send_json(200, {"success": deleted, "state": active_store.get_mutable_state()})
+                    return
+
+                if path == "/api/instances/reorder":
+                    ordered = body.get("ordered_ids")
+                    if not isinstance(ordered, list):
+                        raise ValueError("'ordered_ids' must be a list of instance IDs.")
+                    new_order = active_store.reorder_instances([str(x) for x in ordered])
+                    self._send_json(
+                        200,
+                        {"success": True, "ordered_ids": new_order, "state": active_store.get_mutable_state()},
+                    )
                     return
 
                 self._send_json(404, {"error": f"Unknown endpoint: {path}"})

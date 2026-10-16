@@ -189,6 +189,9 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             assert "onToolFilterChange" in html
             assert "category-edit-btn" in html
             assert "toggleExpandCategory" in html
+            assert '<h3 id="main-panel-title">Details</h3>' in html
+            assert "reorderInstances" in html
+            assert "drag-handle" in html
 
         # 2. GET /api/state returns full state including default_instance_templates
         with urllib.request.urlopen(f"{base_url}/api/state", timeout=5) as resp:
@@ -258,6 +261,25 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             assert restore_res["success"] is True
             assert restore_res["instance"]["id"] == "aem-dev-local"
             assert "aem-dev-local" in restore_res["state"]["instances"]
+
+        # 6. Reorder MCP instances via POST /api/instances/reorder
+        reorder_req = urllib.request.Request(
+            f"{base_url}/api/instances/reorder",
+            data=json.dumps({
+                "ordered_ids": ["aem-dev-prod", "aem-dev-local", "aem-dev-perf"]
+            }).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(reorder_req, timeout=5) as resp:
+            reorder_res = json.loads(resp.read().decode("utf-8"))
+            assert reorder_res["success"] is True
+            assert reorder_res["ordered_ids"][:3] == ["aem-dev-prod", "aem-dev-local", "aem-dev-perf"]
+            assert list(reorder_res["state"]["instances"].keys())[:3] == [
+                "aem-dev-prod",
+                "aem-dev-local",
+                "aem-dev-perf",
+            ]
     finally:
         server.shutdown()
         server.server_close()
