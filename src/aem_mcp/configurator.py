@@ -885,6 +885,12 @@ class ConfiguratorStore:
 
         return {"mcpServers": mcp_servers}
 
+    def get_mutable_state(self) -> dict[str, Any]:
+        return {
+            "environments": self.environments,
+            "instances": self.instances,
+        }
+
     def get_full_state(self) -> dict[str, Any]:
         return {
             "categories": TOOL_CATEGORIES,
@@ -907,7 +913,8 @@ CONFIGURATOR_STORE = ConfiguratorStore()
 def _load_ui_html() -> str:
     ui_path = Path(__file__).parent / "configurator_ui.html"
     if ui_path.exists():
-        return ui_path.read_text(encoding="utf-8")
+        raw = ui_path.read_text(encoding="utf-8")
+        return "\n".join(line.lstrip() for line in raw.splitlines() if line.strip())
     return "<html><body><h1>Configurator UI file missing</h1></body></html>"
 
 
@@ -948,17 +955,17 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
             try:
                 if path == "/api/environments":
                     env = active_store.upsert_environment(body)
-                    self._send_json(200, {"success": True, "environment": env, "state": active_store.get_full_state()})
+                    self._send_json(200, {"success": True, "environment": env, "state": active_store.get_mutable_state()})
                     return
 
                 if path == "/api/environments/delete":
                     deleted = active_store.delete_environment(str(body.get("id", "")))
-                    self._send_json(200, {"success": deleted, "state": active_store.get_full_state()})
+                    self._send_json(200, {"success": deleted, "state": active_store.get_mutable_state()})
                     return
 
                 if path == "/api/instances":
                     inst = active_store.upsert_instance(body)
-                    self._send_json(200, {"success": True, "instance": inst, "state": active_store.get_full_state()})
+                    self._send_json(200, {"success": True, "instance": inst, "state": active_store.get_mutable_state()})
                     return
 
                 if path == "/api/instances/batch-clone":
@@ -970,7 +977,7 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
                         allowed_tools=body.get("allowed_tools"),
                         disable_sandbox_in_prod=bool(body.get("disable_sandbox_in_prod", True)),
                     )
-                    self._send_json(200, {"success": True, "created": created, "state": active_store.get_full_state()})
+                    self._send_json(200, {"success": True, "created": created, "state": active_store.get_mutable_state()})
                     return
 
                 if path == "/api/instances/restore-defaults":
@@ -989,7 +996,7 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
                                 "success": True,
                                 "instance": recreated,
                                 "restored": [recreated],
-                                "state": active_store.get_full_state(),
+                                "state": active_store.get_mutable_state(),
                             },
                         )
                         return
@@ -997,12 +1004,12 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
                         instance_ids=list(ids_arg) if isinstance(ids_arg, list) else None,
                         overwrite=bool(body.get("overwrite", False)),
                     )
-                    self._send_json(200, {"success": True, "restored": restored, "state": active_store.get_full_state()})
+                    self._send_json(200, {"success": True, "restored": restored, "state": active_store.get_mutable_state()})
                     return
 
                 if path == "/api/instances/delete":
                     deleted = active_store.delete_instance(str(body.get("id", "")))
-                    self._send_json(200, {"success": deleted, "state": active_store.get_full_state()})
+                    self._send_json(200, {"success": deleted, "state": active_store.get_mutable_state()})
                     return
 
                 self._send_json(404, {"error": f"Unknown endpoint: {path}"})

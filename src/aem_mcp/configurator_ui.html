@@ -969,6 +969,32 @@
       });
     }
 
+    function getDefaultInstanceTemplates() {
+      if (STATE && STATE.default_instance_templates && Object.keys(STATE.default_instance_templates).length > 0) {
+        return STATE.default_instance_templates;
+      }
+      const presets = (STATE && STATE.presets) || {};
+      const devTools = (presets.developer && presets.developer.tools) ? [...presets.developer.tools] : [];
+      const devProdTools = (presets['developer-readonly'] && presets['developer-readonly'].tools)
+        ? [...presets['developer-readonly'].tools]
+        : devTools.filter(t => !t.startsWith('execute_') && (t === 'package_list' || t === 'package_download' || !t.startsWith('package_')));
+      const authorTools = (presets['content-author'] && presets['content-author'].tools) ? [...presets['content-author'].tools] : [];
+      const devRoPreset = presets['developer-readonly'] ? 'developer-readonly' : 'developer';
+      const rows = [
+        ['aem-dev-local', 'AEM Developer (Local DEV)', 'developer', 'dev', '', devTools],
+        ['aem-dev-int', 'AEM Developer (INT)', 'developer', 'int', '', devTools],
+        ['aem-dev-stg', 'AEM Developer (STG)', 'developer', 'stg', '', devTools],
+        ['aem-dev-prod', 'AEM Developer (PROD Read-Only)', devRoPreset, 'prod', '', devProdTools],
+        ['aem-author-qa', 'Content Author & QA (QA)', 'content-author', 'qa', '/content/novaria', authorTools],
+        ['aem-author-prod', 'Content Author & QA (PROD)', 'content-author', 'prod', '/content/novaria', authorTools]
+      ];
+      const out = {};
+      rows.forEach(([id, name, role_preset, environment, root_path_override, allowed_tools]) => {
+        out[id] = { id, name, role_preset, environment, root_path_override, allowed_tools };
+      });
+      return out;
+    }
+
     function populateSelects() {
       const envSelects = [document.getElementById('inst-env'), document.getElementById('new-inst-env')];
       envSelects.forEach(sel => {
@@ -1011,7 +1037,7 @@
         customOpt.textContent = '— Custom Role Preset + Environment —';
         tplSel.appendChild(customOpt);
 
-        const defaultTemplates = STATE.default_instance_templates || {};
+        const defaultTemplates = getDefaultInstanceTemplates();
         const tplList = Object.values(defaultTemplates);
         if (tplList.length > 0) {
           const group = document.createElement('optgroup');
@@ -1179,7 +1205,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          STATE = data.state;
+          STATE = { ...STATE, ...data.state };
           activeInstanceId = data.instance.id;
           renderAll();
           showToast(`Saved instance '${activeInstanceId}'`);
@@ -1203,7 +1229,7 @@
           body: JSON.stringify({ id: activeInstanceId })
         });
         const data = await res.json();
-        if (data.state) STATE = data.state;
+        if (data.state) STATE = { ...STATE, ...data.state };
       } catch (e) {
         delete STATE.instances[activeInstanceId];
       }
@@ -1213,38 +1239,67 @@
     }
 
     async function restoreDefaultInstances(forceOverwrite = false) {
-      const templates = STATE.default_instance_templates || {};
+      const templates = getDefaultInstanceTemplates();
       const missingIds = Object.keys(templates).filter(id => !STATE.instances[id]);
       const overwrite = forceOverwrite || missingIds.length === 0;
+      const targetIds = overwrite ? Object.keys(templates) : missingIds;
+
+      // 1. Try dedicated batch restore endpoint first
       try {
         const res = await fetch('/api/instances/restore-defaults', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ overwrite })
         });
-        const data = await res.json();
-        if (data.success && data.state) {
-          STATE = data.state;
-          if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
-            activeInstanceId = Object.keys(STATE.instances)[0] || null;
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.state) {
+            STATE = { ...STATE, ...data.state };
+            if (targetIds.length > 0 && STATE.instances[targetIds[0]]) {
+              activeInstanceId = targetIds[0];
+            } else if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
+              activeInstanceId = Object.keys(STATE.instances)[0] || null;
+            }
+            renderAll();
+            const count = (data.restored || []).length;
+            showToast(count > 0 ? `Restored ${count} default instance(s) from template` : 'All default instances are active');
+            return;
           }
-          renderAll();
-          const count = (data.restored || []).length;
-          showToast(count > 0 ? `Restored ${count} default instance(s) from template` : 'All default instances are active');
-          return;
         }
-      } catch (e) {
-        Object.values(templates).forEach(tpl => {
-          if (overwrite || !STATE.instances[tpl.id]) {
-            STATE.instances[tpl.id] = JSON.parse(JSON.stringify(tpl));
+      } catch (e) {}
+
+      // 2. Fallback: recreate each target template via POST /api/instances
+      let restoredCount = 0;
+      for (const tplId of targetIds) {
+        const tpl = templates[tplId];
+        if (!tpl) continue;
+        const payload = JSON.parse(JSON.stringify(tpl));
+        try {
+          const res = await fetch('/api/instances', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && data.state) {
+              STATE = { ...STATE, ...data.state };
+              restoredCount++;
+              continue;
+            }
           }
-        });
-        if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
-          activeInstanceId = Object.keys(STATE.instances)[0] || null;
-        }
-        renderAll();
-        showToast('Restored default instances from templates');
+        } catch (e) {}
+        STATE.instances[tpl.id] = payload;
+        restoredCount++;
       }
+
+      if (targetIds.length > 0 && STATE.instances[targetIds[0]]) {
+        activeInstanceId = targetIds[0];
+      } else if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
+        activeInstanceId = Object.keys(STATE.instances)[0] || null;
+      }
+      renderAll();
+      showToast(restoredCount > 0 ? `Restored ${restoredCount} default instance(s) from template` : 'Default instances restored');
     }
 
     function renderEnvironmentEditor() {
@@ -1298,7 +1353,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          STATE = data.state;
+          STATE = { ...STATE, ...data.state };
           activeEnvId = data.environment.id;
           renderAll();
           showToast(`Saved environment '${activeEnvId.toUpperCase()}'`);
@@ -1322,7 +1377,7 @@
           body: JSON.stringify({ id: activeEnvId })
         });
         const data = await res.json();
-        if (data.state) STATE = data.state;
+        if (data.state) STATE = { ...STATE, ...data.state };
       } catch (e) {
         delete STATE.environments[activeEnvId];
       }
@@ -1394,7 +1449,7 @@
     // Modals
     function openNewInstanceModal() {
       populateSelects();
-      const templates = STATE.default_instance_templates || {};
+      const templates = getDefaultInstanceTemplates();
       const missingTplId = Object.keys(templates).find(id => !STATE.instances[id]) || '';
       const tplSel = document.getElementById('new-inst-default-template');
       if (tplSel) {
@@ -1413,13 +1468,13 @@
     function onDefaultTemplateSelect() {
       const tplSel = document.getElementById('new-inst-default-template');
       const tplId = tplSel ? tplSel.value : '';
-      const templates = STATE.default_instance_templates || {};
+      const templates = getDefaultInstanceTemplates();
       const tpl = templates[tplId];
       if (!tpl) {
         updateNewInstanceDefaults();
         return;
       }
-      document.getElementById('new-inst-preset').value = tpl.role_preset || 'developer';
+      document.getElementById('new-inst-preset').value = STATE.presets[tpl.role_preset] ? tpl.role_preset : 'developer';
       document.getElementById('new-inst-env').value = tpl.environment || 'dev';
       const alreadyExists = Boolean(STATE.instances[tpl.id]);
       document.getElementById('new-inst-id').value = alreadyExists ? `${tpl.id}-copy` : tpl.id;
@@ -1453,7 +1508,7 @@
     async function confirmCreateInstance() {
       const tplSel = document.getElementById('new-inst-default-template');
       const tplId = tplSel ? tplSel.value : '';
-      const templates = STATE.default_instance_templates || {};
+      const templates = getDefaultInstanceTemplates();
       const tpl = templates[tplId];
 
       const presetId = document.getElementById('new-inst-preset').value;
@@ -1474,14 +1529,16 @@
               environment: envId
             })
           });
-          const data = await res.json();
-          if (data.success) {
-            STATE = data.state;
-            activeInstanceId = data.instance.id;
-            closeModals();
-            switchSidebarTab('instances');
-            showToast(`Recreated '${activeInstanceId}' from template '${tplId}'`);
-            return;
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success) {
+              STATE = { ...STATE, ...data.state };
+              activeInstanceId = data.instance.id;
+              closeModals();
+              switchSidebarTab('instances');
+              showToast(`Recreated '${activeInstanceId}' from template '${tplId}'`);
+              return;
+            }
           }
         } catch (e) {}
       }
@@ -1503,7 +1560,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          STATE = data.state;
+          STATE = { ...STATE, ...data.state };
           activeInstanceId = data.instance.id;
         }
       } catch (e) {
@@ -1559,7 +1616,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          STATE = data.state;
+          STATE = { ...STATE, ...data.state };
           if (data.created && data.created.length) {
             activeInstanceId = data.created[0].id;
           }
