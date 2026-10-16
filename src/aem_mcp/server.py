@@ -134,6 +134,7 @@ def aem_runtime_resource() -> str:
     info = get_runtime_info()
     info["active_instance"] = _ACTIVE_SCOPING.get("active_instance", "default-unscoped")
     info["role_preset"] = _ACTIVE_SCOPING.get("role_preset", "full")
+    info["instance_enabled"] = str(bool(_ACTIVE_SCOPING.get("enabled", True))).lower()
     env_meta = _ACTIVE_SCOPING.get("environment")
     if isinstance(env_meta, dict) and env_meta.get("id"):
         info["environment_tier"] = str(env_meta["id"])

@@ -301,9 +301,89 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
                 "aem-dev-local",
                 "aem-dev-perf",
             ]
+
+        # 7. Toggle instance enabled/disabled via POST /api/instances/toggle without deleting it
+        toggle_off_req = urllib.request.Request(
+            f"{base_url}/api/instances/toggle",
+            data=json.dumps({"id": "aem-dev-perf", "enabled": False}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(toggle_off_req, timeout=5) as resp:
+            toggle_off_res = json.loads(resp.read().decode("utf-8"))
+            assert toggle_off_res["success"] is True
+            assert toggle_off_res["instance"]["id"] == "aem-dev-perf"
+            assert toggle_off_res["instance"]["enabled"] is False
+            assert toggle_off_res["instance"]["allowed_tools"] == [
+                "aem_json",
+                "aem_querybuilder",
+                "aem_lint_query_indexing",
+            ]
+            assert toggle_off_res["state"]["instances"]["aem-dev-perf"]["enabled"] is False
+
+        toggle_on_req = urllib.request.Request(
+            f"{base_url}/api/instances/toggle",
+            data=json.dumps({"id": "aem-dev-perf", "enabled": True}).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(toggle_on_req, timeout=5) as resp:
+            toggle_on_res = json.loads(resp.read().decode("utf-8"))
+            assert toggle_on_res["success"] is True
+            assert toggle_on_res["instance"]["enabled"] is True
     finally:
         server.shutdown()
         server.server_close()
+
+
+def test_disable_and_enable_instance_without_deleting(tmp_path: Path):
+    """
+    Verify that disabling an MCP instance preserves its saved configuration,
+    excludes it from bulk mcpServers export, marks it disabled on single-instance
+    export, and prevents tool execution at runtime until re-enabled.
+    """
+    profiles_dir = tmp_path / "profiles"
+    store = ConfiguratorStore(profiles_dir=profiles_dir)
+
+    orig_tools = list(store.instances["aem-dev-local"]["allowed_tools"])
+    assert len(orig_tools) == 24
+    assert store.instances["aem-dev-local"]["enabled"] is True
+
+    # Disable aem-dev-local without deleting
+    disabled_inst = store.set_instance_enabled("aem-dev-local", False)
+    assert disabled_inst["enabled"] is False
+    assert disabled_inst["allowed_tools"] == orig_tools
+
+    # Reload from disk and verify persistence + profile file preservation
+    reloaded = ConfiguratorStore(profiles_dir=profiles_dir)
+    assert reloaded.instances["aem-dev-local"]["enabled"] is False
+    assert reloaded.instances["aem-dev-local"]["allowed_tools"] == orig_tools
+    profile_data = json.loads((profiles_dir / "aem-dev-local.json").read_text(encoding="utf-8"))
+    assert profile_data["enabled"] is False
+    assert profile_data["allowed_tools"] == orig_tools
+
+    # Bulk client config export excludes disabled instances by default
+    bulk_cfg = reloaded.generate_client_config()
+    assert "aem-dev-local" not in bulk_cfg["mcpServers"]
+    assert "aem-dev-prod" in bulk_cfg["mcpServers"]
+
+    # Explicit single-instance export includes it with "disabled": True
+    single_cfg = reloaded.generate_client_config(instance_ids=["aem-dev-local"])
+    assert "aem-dev-local" in single_cfg["mcpServers"]
+    assert single_cfg["mcpServers"]["aem-dev-local"]["disabled"] is True
+
+    # Runtime scoping resolves 0 allowed tools while disabled
+    scoping_off = reloaded.resolve_runtime_scoping(instance_id="aem-dev-local")
+    assert scoping_off["enabled"] is False
+    assert scoping_off["allowed_tools"] == set()
+
+    # Re-enable and verify full toolset is restored immediately
+    reenabled = reloaded.set_instance_enabled("aem-dev-local", True)
+    assert reenabled["enabled"] is True
+    scoping_on = reloaded.resolve_runtime_scoping(instance_id="aem-dev-local")
+    assert scoping_on["enabled"] is True
+    assert scoping_on["allowed_tools"] == set(orig_tools)
+
 
 
 def test_runtime_server_scoping_enforces_authorized_tools():

@@ -558,6 +558,7 @@ def _default_instances() -> dict[str, dict[str, Any]]:
             "name": "AEM Developer (DEV Simulator)",
             "role_preset": "developer",
             "environment": "dev",
+            "enabled": True,
             "root_path_override": "",
             "allowed_tools": dev_tools,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -567,6 +568,7 @@ def _default_instances() -> dict[str, dict[str, Any]]:
             "name": "AEM Developer (INT)",
             "role_preset": "developer",
             "environment": "int",
+            "enabled": True,
             "root_path_override": "",
             "allowed_tools": dev_tools,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -576,6 +578,7 @@ def _default_instances() -> dict[str, dict[str, Any]]:
             "name": "AEM Developer (STG)",
             "role_preset": "developer",
             "environment": "stg",
+            "enabled": True,
             "root_path_override": "",
             "allowed_tools": dev_tools,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -585,6 +588,7 @@ def _default_instances() -> dict[str, dict[str, Any]]:
             "name": "AEM Developer (PROD Read-Only)",
             "role_preset": "developer-readonly",
             "environment": "prod",
+            "enabled": True,
             "root_path_override": "",
             "allowed_tools": dev_prod_tools,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -594,6 +598,7 @@ def _default_instances() -> dict[str, dict[str, Any]]:
             "name": "Content Author & QA (QA)",
             "role_preset": "content-author",
             "environment": "qa",
+            "enabled": True,
             "root_path_override": "/content/novaria",
             "allowed_tools": author_tools,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -603,6 +608,7 @@ def _default_instances() -> dict[str, dict[str, Any]]:
             "name": "Content Author & QA (PROD)",
             "role_preset": "content-author",
             "environment": "prod",
+            "enabled": True,
             "root_path_override": "/content/novaria",
             "allowed_tools": author_tools,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -637,6 +643,9 @@ class ConfiguratorStore:
                     if isinstance(data.get("instances"), dict)
                     else _default_instances()
                 )
+                for inst in self.instances.values():
+                    if isinstance(inst, dict) and "enabled" not in inst:
+                        inst["enabled"] = True
                 return
             except Exception:
                 pass
@@ -711,11 +720,16 @@ class ConfiguratorStore:
             allowed_tools = [t for t in raw_tools if t in valid_set]
             role_preset = detect_matching_preset(allowed_tools)
 
+        existing = self.instances.get(inst_id, {})
+        raw_enabled = inst_data.get("enabled")
+        enabled = bool(raw_enabled) if raw_enabled is not None else bool(existing.get("enabled", True))
+
         entry = {
             "id": inst_id,
             "name": str(inst_data.get("name") or inst_id).strip(),
             "role_preset": role_preset,
             "environment": env_id,
+            "enabled": enabled,
             "root_path_override": str(inst_data.get("root_path_override") or "").strip(),
             "allowed_tools": allowed_tools,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -723,6 +737,16 @@ class ConfiguratorStore:
         self.instances[inst_id] = entry
         self.save()
         return entry
+
+    def set_instance_enabled(self, inst_id: str, enabled: bool) -> dict[str, Any]:
+        """Enable or disable a configured MCP instance without deleting its saved configuration."""
+        clean_id = inst_id.strip().lower()
+        if clean_id not in self.instances:
+            raise ValueError(f"Unknown instance '{inst_id}'.")
+        self.instances[clean_id]["enabled"] = bool(enabled)
+        self.instances[clean_id]["updated_at"] = datetime.now(timezone.utc).isoformat()
+        self.save()
+        return self.instances[clean_id]
 
     def clone_role_across_environments(
         self,
@@ -817,6 +841,7 @@ class ConfiguratorStore:
             "name": (new_name or tpl["name"]).strip(),
             "role_preset": tpl["role_preset"],
             "environment": target_env,
+            "enabled": True,
             "root_path_override": tpl.get("root_path_override", ""),
             "allowed_tools": list(tpl["allowed_tools"]),
         })
@@ -864,6 +889,7 @@ class ConfiguratorStore:
         resolved_env = None
         allowed_tools: set[str] | None = None
         active_label = "default-unscoped"
+        is_enabled = True
 
         if inst_id and inst_id in self.instances:
             inst = self.instances[inst_id]
@@ -871,7 +897,8 @@ class ConfiguratorStore:
             preset_id = inst.get("role_preset", "custom")
             env_key = target_env_id or inst.get("environment", "dev")
             resolved_env = self.environments.get(env_key)
-            allowed_tools = set(inst.get("allowed_tools", ALL_TOOL_NAMES))
+            is_enabled = bool(inst.get("enabled", True))
+            allowed_tools = set(inst.get("allowed_tools", ALL_TOOL_NAMES)) if is_enabled else set()
         else:
             if target_env_id and target_env_id in self.environments:
                 resolved_env = self.environments[target_env_id]
@@ -879,7 +906,7 @@ class ConfiguratorStore:
                 allowed_tools = set(ROLE_PRESETS[preset_id]["tools"])
                 active_label = f"preset:{preset_id}"
 
-        if tools_csv:
+        if tools_csv and is_enabled:
             custom_list = [t.strip() for t in tools_csv.split(",") if t.strip()]
             allowed_tools = set(custom_list)
 
@@ -887,20 +914,31 @@ class ConfiguratorStore:
             "active_instance": inst_id or active_label,
             "role_preset": preset_id or "full",
             "environment": resolved_env,
+            "enabled": is_enabled,
             "allowed_tools": allowed_tools,
         }
 
-    def generate_client_config(self, instance_ids: list[str] | None = None) -> dict[str, Any]:
+    def generate_client_config(
+        self,
+        instance_ids: list[str] | None = None,
+        include_disabled: bool = False,
+    ) -> dict[str, Any]:
         """
         Generates ready-to-paste MCP client configuration JSON (`mcpServers`)
-        for one or more configured instances.
+        for one or more configured instances. By default, disabled instances are
+        excluded from bulk exports unless explicitly requested in `instance_ids`
+        or `include_disabled=True`.
         """
-        targets = instance_ids or list(self.instances.keys())
+        explicit_ids = instance_ids is not None
+        targets = instance_ids if explicit_ids else list(self.instances.keys())
         mcp_servers: dict[str, Any] = {}
 
         for inst_id in targets:
             inst = self.instances.get(inst_id)
             if not inst:
+                continue
+            inst_enabled = bool(inst.get("enabled", True))
+            if not inst_enabled and not include_disabled and not explicit_ids:
                 continue
             env_id = inst.get("environment", "dev")
             env_cfg = self.environments.get(env_id, DEFAULT_ENVIRONMENTS["dev"])
@@ -921,11 +959,14 @@ class ConfiguratorStore:
                 env_vars["AEM_IMS_CLIENT_SECRET"] = "<YOUR_IMS_CLIENT_SECRET>"
                 env_vars["AEM_IMS_ACCESS_TOKEN"] = "<OPTIONAL_PRE_GENERATED_TOKEN>"
 
-            mcp_servers[inst["id"]] = {
+            server_entry: dict[str, Any] = {
                 "command": "aem-mcp",
                 "args": ["--instance", inst["id"]],
                 "env": env_vars,
             }
+            if not inst_enabled:
+                server_entry["disabled"] = True
+            mcp_servers[inst["id"]] = server_entry
 
         return {"mcpServers": mcp_servers}
 
@@ -1023,6 +1064,13 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
 
                 if path == "/api/instances":
                     inst = active_store.upsert_instance(body)
+                    self._send_json(200, {"success": True, "instance": inst, "state": active_store.get_mutable_state()})
+                    return
+
+                if path == "/api/instances/toggle":
+                    inst_id = str(body.get("id", "")).strip()
+                    enabled = bool(body.get("enabled", True))
+                    inst = active_store.set_instance_enabled(inst_id, enabled)
                     self._send_json(200, {"success": True, "instance": inst, "state": active_store.get_mutable_state()})
                     return
 

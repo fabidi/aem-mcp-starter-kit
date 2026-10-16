@@ -312,6 +312,59 @@
       min-width: 0;
     }
 
+    .list-item.instance-disabled {
+      opacity: 0.62;
+      border-style: dashed;
+    }
+    .list-item.instance-disabled .list-item-title {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+    .inst-switch {
+      width: 30px;
+      height: 17px;
+      border-radius: 999px;
+      background: var(--bg-badge);
+      border: 1px solid var(--border-hover);
+      position: relative;
+      cursor: pointer;
+      padding: 0;
+      flex-shrink: 0;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .inst-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: transform 0.15s ease, background-color 0.15s ease;
+    }
+    .inst-switch.on {
+      background: rgba(16, 185, 129, 0.25);
+      border-color: var(--success);
+    }
+    .inst-switch.on::after {
+      transform: translateX(13px);
+      background: var(--success);
+    }
+    .status-pill-disabled {
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-family: var(--font-mono);
+      letter-spacing: 0.4px;
+      background: rgba(148, 163, 184, 0.16);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
     /* Environment Tier Badges */
     .env-badge {
       padding: 2px 7px;
@@ -919,8 +972,10 @@
               <div class="card-title">
                 <span id="active-inst-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Instance Configuration</span>
                 <span id="active-inst-env-badge" class="env-badge env-dev">DEV</span>
+                <span id="active-inst-disabled-badge" class="status-pill-disabled" style="display:none;">DISABLED</span>
               </div>
               <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <button id="btn-toggle-instance-enabled" class="btn btn-sm" type="button" onclick="toggleInstanceEnabled(activeInstanceId)" title="Enable or disable this MCP instance without deleting its configuration">Enabled</button>
                 <button class="btn btn-sm" type="button" onclick="applyPresetToCurrent('blank')">Reset (0 Tools)</button>
                 <button class="btn btn-sm" type="button" onclick="duplicateCurrentInstance()">Clone</button>
                 <button class="btn btn-sm btn-danger" type="button" onclick="deleteCurrentInstance()">Delete</button>
@@ -1240,6 +1295,7 @@
       if (curName !== (saved.name || '').trim()) return true;
       if (curEnv !== (saved.environment || '')) return true;
       if (curPreset !== (saved.role_preset || 'custom')) return true;
+      if (Boolean(inst.enabled !== false) !== Boolean(saved.enabled !== false)) return true;
       return computeToolsetMask(inst.allowed_tools) !== computeToolsetMask(saved.allowed_tools);
     }
 
@@ -1453,10 +1509,12 @@
         return;
       }
       instances.forEach(inst => {
+        const isEnabled = inst.enabled !== false;
         const div = document.createElement('div');
-        div.className = 'list-item' + (inst.id === activeInstanceId ? ' active' : '');
+        div.className = 'list-item' + (inst.id === activeInstanceId ? ' active' : '') + (isEnabled ? '' : ' instance-disabled');
         div.draggable = true;
         div.setAttribute('data-instance-id', inst.id);
+        div.setAttribute('data-enabled', isEnabled ? 'true' : 'false');
         div.onclick = () => { activeInstanceId = inst.id; renderAll(); };
 
         div.ondragstart = (e) => {
@@ -1501,17 +1559,31 @@
         };
 
         const count = (inst.allowed_tools || []).length;
+        const switchTitle = isEnabled
+          ? `Disable '${inst.id}' (keeps saved configuration)`
+          : `Enable '${inst.id}'`;
         div.innerHTML = `
           <div class="list-item-top">
             <div style="display:flex; align-items:center; gap:6px; min-width:0;">
               <span class="drag-handle" title="Drag to reorder instance" aria-hidden="true">⋮⋮</span>
               <span class="list-item-title">${inst.name}</span>
             </div>
-            <span class="${envBadgeClass(inst.environment)}">${inst.environment}</span>
+            <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+              <span class="${envBadgeClass(inst.environment)}">${inst.environment}</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked="${isEnabled ? 'true' : 'false'}"
+                aria-label="${switchTitle}"
+                title="${switchTitle}"
+                class="inst-switch${isEnabled ? ' on' : ''}"
+                onclick="event.stopPropagation(); toggleInstanceEnabled('${inst.id}');"
+              ><span class="inst-switch-knob"></span></button>
+            </div>
           </div>
           <div class="list-item-sub">
             <span>${inst.id}</span>
-            <span>${count}/${totalTools} tools</span>
+            <span>${isEnabled ? `${count}/${totalTools} tools` : `Disabled (${count} saved)`}</span>
           </div>
         `;
         container.appendChild(div);
@@ -1713,6 +1785,7 @@
       const inst = STATE.instances[activeInstanceId];
       if (!inst) return;
 
+      const isEnabled = inst.enabled !== false;
       const resolvedPreset = syncInstancePresetFromTools(inst);
       const allowedSet = new Set(inst.allowed_tools || []);
 
@@ -1720,6 +1793,18 @@
       const badge = document.getElementById('active-inst-env-badge');
       badge.className = envBadgeClass(inst.environment);
       badge.textContent = inst.environment.toUpperCase();
+
+      const disabledBadge = document.getElementById('active-inst-disabled-badge');
+      if (disabledBadge) {
+        disabledBadge.style.display = isEnabled ? 'none' : 'inline-block';
+      }
+      const toggleBtn = document.getElementById('btn-toggle-instance-enabled');
+      if (toggleBtn) {
+        toggleBtn.textContent = isEnabled ? '✓ Enabled' : 'Disabled (Enable)';
+        toggleBtn.setAttribute('aria-pressed', isEnabled ? 'true' : 'false');
+        toggleBtn.style.borderColor = isEnabled ? 'rgba(52, 211, 153, 0.45)' : 'var(--border)';
+        toggleBtn.style.color = isEnabled ? 'var(--success)' : 'var(--text-muted)';
+      }
 
       const idEl = document.getElementById('inst-id');
       const nameEl = document.getElementById('inst-name');
@@ -1740,13 +1825,17 @@
 
       const totalTools = STATE.tools.length;
       const fullTokens = STATE.tools.reduce((acc, t) => acc + t.tokens, 0);
-      const activeTokens = STATE.tools.filter(t => allowedSet.has(t.name)).reduce((acc, t) => acc + t.tokens, 0);
+      const activeTokens = isEnabled ? STATE.tools.filter(t => allowedSet.has(t.name)).reduce((acc, t) => acc + t.tokens, 0) : 0;
       const savedPct = fullTokens ? Math.round((1 - activeTokens / fullTokens) * 100) : 0;
 
-      document.getElementById('stat-tools-count').textContent = `${allowedSet.size} / ${totalTools}`;
-      document.getElementById('stat-tools-pct').textContent = `Preset: ${resolvedPreset}`;
+      document.getElementById('stat-tools-count').textContent = isEnabled ? `${allowedSet.size} / ${totalTools}` : `0 / ${totalTools} (Off)`;
+      document.getElementById('stat-tools-pct').textContent = isEnabled
+        ? `Preset: ${resolvedPreset}`
+        : `Disabled (${allowedSet.size} saved · ${resolvedPreset})`;
       document.getElementById('stat-tokens').textContent = `~${activeTokens.toLocaleString()} tok`;
-      document.getElementById('stat-tokens-saved').textContent = savedPct > 0 ? `${savedPct}% context reduction vs Full` : `Full tool schema loaded`;
+      document.getElementById('stat-tokens-saved').textContent = !isEnabled
+        ? 'Instance disabled (excluded from export)'
+        : (savedPct > 0 ? `${savedPct}% context reduction vs Full` : `Full tool schema loaded`);
 
       const envObj = STATE.environments[inst.environment] || STATE.environments.dev;
       document.getElementById('stat-env-mode').textContent = `${envObj.id.toUpperCase()} (${envObj.mode})`;
@@ -1754,11 +1843,13 @@
       urlEl.textContent = envObj.aem_url;
       urlEl.title = envObj.aem_url;
 
-      const hasSandbox = allowedSet.has('execute_code');
+      const hasSandbox = isEnabled && allowedSet.has('execute_code');
       const sbEl = document.getElementById('stat-sandbox');
-      sbEl.textContent = hasSandbox ? 'Authorized' : 'Disabled';
+      sbEl.textContent = !isEnabled ? 'Disabled' : (hasSandbox ? 'Authorized' : 'Disabled');
       sbEl.style.color = hasSandbox ? 'var(--warning)' : 'var(--success)';
-      document.getElementById('stat-sandbox-sub').textContent = hasSandbox ? 'AST + timeout guarded' : 'Strict read-only mode';
+      document.getElementById('stat-sandbox-sub').textContent = !isEnabled
+        ? 'Instance disabled'
+        : (hasSandbox ? 'AST + timeout guarded' : 'Strict read-only mode');
 
       renderCategoriesGrid();
       updateSaveButtonState();
@@ -2024,6 +2115,41 @@
       showToast('Instance deleted (can be recreated from template)');
     }
 
+    async function toggleInstanceEnabled(instId) {
+      const targetId = instId || activeInstanceId;
+      const inst = STATE && STATE.instances && STATE.instances[targetId];
+      if (!inst) return;
+      const nextEnabled = !(inst.enabled !== false);
+      inst.enabled = nextEnabled;
+      if (SAVED_INSTANCES[targetId]) {
+        SAVED_INSTANCES[targetId].enabled = nextEnabled;
+      }
+      renderAll();
+
+      try {
+        const res = await fetch('/api/instances/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: targetId, enabled: nextEnabled })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.instance) {
+            STATE.instances[targetId] = {
+              ...inst,
+              enabled: Boolean(data.instance.enabled !== false)
+            };
+            if (SAVED_INSTANCES[targetId]) {
+              SAVED_INSTANCES[targetId].enabled = Boolean(data.instance.enabled !== false);
+            }
+            renderAll();
+          }
+        }
+      } catch (e) {}
+
+      showToast(nextEnabled ? `Enabled '${targetId}'` : `Disabled '${targetId}' (configuration preserved)`);
+    }
+
     async function restoreDefaultInstances(forceOverwrite = false) {
       const templates = getDefaultInstanceTemplates();
       const missingIds = Object.keys(templates).filter(id => !STATE.instances[id]);
@@ -2187,13 +2313,14 @@
       if (scope === 'current' && currentInst) {
         targetInstances = [currentInst];
       } else if (scope === 'same_role' && currentInst) {
-        targetInstances = Object.values(STATE.instances).filter(i => i.role_preset === currentInst.role_preset);
+        targetInstances = Object.values(STATE.instances).filter(i => i.enabled !== false && i.role_preset === currentInst.role_preset);
       } else {
-        targetInstances = Object.values(STATE.instances);
+        targetInstances = Object.values(STATE.instances).filter(i => i.enabled !== false);
       }
 
       const mcpServers = {};
       targetInstances.forEach(inst => {
+        const isEnabled = inst.enabled !== false;
         const envCfg = STATE.environments[inst.environment] || STATE.environments.dev;
         const envVars = {
           AEM_MCP_INSTANCE: inst.id,
@@ -2211,11 +2338,15 @@
           envVars.AEM_IMS_CLIENT_ID = '<YOUR_IMS_CLIENT_ID>';
           envVars.AEM_IMS_CLIENT_SECRET = '<YOUR_IMS_CLIENT_SECRET>';
         }
-        mcpServers[inst.id] = {
+        const entry = {
           command: 'aem-mcp',
           args: ['--instance', inst.id],
           env: envVars
         };
+        if (!isEnabled) {
+          entry.disabled = true;
+        }
+        mcpServers[inst.id] = entry;
       });
       return { mcpServers };
     }
