@@ -358,36 +358,205 @@
       margin-top: 2px;
     }
 
-    /* Tool Categories & Matrix */
-    .category-block {
+    /* Tool Categories & Matrix (Zoho-style Collapsible Category Cards) */
+    .tools-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
       background: var(--bg-panel);
       border: 1px solid var(--border);
       border-radius: 10px;
-      overflow: hidden;
-      margin-bottom: 14px;
+      padding: 10px 14px;
     }
-    .category-header {
-      padding: 12px 16px;
+    .filter-input-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 240px;
+      display: flex;
+      align-items: center;
+    }
+    .filter-input-icon {
+      position: absolute;
+      left: 11px;
+      color: var(--text-muted);
+      font-size: 13px;
+      pointer-events: none;
+    }
+    #tool-filter-input {
+      width: 100%;
+      padding: 8px 32px 8px 32px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text-main);
+      font-size: 12.5px;
+    }
+    #tool-filter-input:focus {
+      border-color: var(--border-focus);
+    }
+    .filter-clear-btn {
+      position: absolute;
+      right: 8px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 2px 5px;
+      border-radius: 4px;
+      display: none;
+    }
+    .filter-clear-btn:hover {
+      color: var(--text-main);
+      background: var(--bg-badge);
+    }
+    .filter-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+    .categories-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(295px, 1fr));
+      gap: 12px;
+    }
+    .category-card {
+      background: var(--bg-panel);
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 15px 16px;
+      position: relative;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      user-select: none;
+      transition: border-color 0.14s ease, background-color 0.14s ease, box-shadow 0.14s ease;
+    }
+    .category-card:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-card-hover);
+    }
+    .category-card.selected {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.10);
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.22);
+    }
+    .category-card.partial {
+      border-color: rgba(59, 130, 246, 0.45);
+      background: rgba(59, 130, 246, 0.04);
+    }
+    .category-card.expanded {
+      grid-column: 1 / -1;
+      cursor: default;
+      padding: 0;
+      background: var(--bg-panel);
+      overflow: hidden;
+    }
+    .category-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .category-card-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .category-card-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+    .category-card-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 8px;
+      border-top: 1px solid var(--border-subtle);
+      font-size: 11px;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      color: var(--text-muted);
+    }
+    .cat-status-pill {
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      background: var(--bg-badge);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+    .category-card.selected .cat-status-pill {
+      background: rgba(59, 130, 246, 0.18);
+      color: var(--accent);
+      border-color: rgba(59, 130, 246, 0.45);
+    }
+    .category-card.partial .cat-status-pill {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--warning);
+      border-color: rgba(245, 158, 11, 0.4);
+    }
+    .category-edit-btn {
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(0.95);
+      transition: opacity 0.14s ease, transform 0.14s ease, background-color 0.14s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--bg-card);
+      color: var(--text-main);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .category-edit-btn:hover {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .category-card:hover .category-edit-btn,
+    .category-card:focus-within .category-edit-btn,
+    .category-card.expanded .category-edit-btn {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
+    }
+    .category-expanded-header {
+      padding: 13px 16px;
       background: var(--bg-subtle);
       border-bottom: 1px solid var(--border);
       display: flex;
       justify-content: space-between;
       align-items: center;
-    }
-    .category-info h4 {
-      font-size: 13.5px;
-      font-weight: 700;
-    }
-    .category-info p {
-      font-size: 11.5px;
-      color: var(--text-muted);
-      margin-top: 2px;
+      flex-wrap: wrap;
+      gap: 10px;
     }
     .tools-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(265px, 1fr));
       gap: 10px;
-      padding: 14px;
+      padding: 14px 16px;
     }
     .tool-card {
       background: var(--bg-card);
@@ -399,7 +568,12 @@
       justify-content: space-between;
       gap: 8px;
       cursor: pointer;
+      user-select: none;
       transition: all 0.12s ease;
+    }
+    .tool-card:hover {
+      border-color: var(--border-hover);
+      background: var(--bg-card-hover);
     }
     .tool-card.enabled {
       border-color: rgba(59, 130, 246, 0.55);
@@ -416,6 +590,20 @@
       font-weight: 600;
       font-size: 12.5px;
       color: var(--text-tool-name);
+    }
+    .tool-state-pill {
+      font-size: 10px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      padding: 1px 6px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .tool-card.enabled .tool-state-pill {
+      background: rgba(59, 130, 246, 0.18);
+      border-color: rgba(59, 130, 246, 0.45);
+      color: var(--accent);
     }
     .tool-desc {
       font-size: 11.5px;
@@ -655,8 +843,34 @@
           </div>
         </div>
 
-        <!-- Granular Tool Matrix -->
-        <div id="categories-container"></div>
+        <!-- Typeahead Filter & Category Toolbar -->
+        <div class="tools-toolbar">
+          <div class="filter-input-wrap">
+            <span class="filter-input-icon" aria-hidden="true">🔍</span>
+            <input
+              type="text"
+              id="tool-filter-input"
+              placeholder="Filter tool categories or tools by name, description, or badge (e.g. query, package, dataset)..."
+              aria-label="Filter tool categories and tools"
+              oninput="onToolFilterChange(this.value)"
+            />
+            <button
+              type="button"
+              id="tool-filter-clear"
+              class="filter-clear-btn"
+              title="Clear filter"
+              aria-label="Clear filter"
+              onclick="clearToolFilter()"
+            >✕</button>
+          </div>
+          <div class="filter-meta">
+            <span id="tool-filter-summary">7 categories · 35 tools</span>
+            <button type="button" class="btn btn-sm" id="btn-expand-collapse-all" onclick="toggleExpandAllCategories()">Expand All</button>
+          </div>
+        </div>
+
+        <!-- Zoho-Style Collapsible Category Cards Grid -->
+        <div id="categories-container" class="categories-grid"></div>
       </div>
 
       <!-- Environment Editor View -->
@@ -816,6 +1030,9 @@
     let activeInstanceId = null;
     let activeEnvId = null;
     let sidebarMode = 'instances';
+    let expandedCategories = new Set();
+    let filterOverrideCollapsed = new Set();
+    let toolFilterQuery = '';
     const THEME_STORAGE_KEY = 'aem_mcp_theme';
 
     function getPreferredTheme() {
@@ -1055,6 +1272,78 @@
       }
     }
 
+    function getCatFilterInfo(cat) {
+      const q = (toolFilterQuery || '').trim().toLowerCase();
+      const allCatTools = STATE.tools.filter(t => t.category === cat.id);
+      if (!q) {
+        return {
+          q: '',
+          allCatTools,
+          visibleTools: allCatTools,
+          catMatches: true,
+          visible: true,
+          isExpanded: expandedCategories.has(cat.id)
+        };
+      }
+      const catMatches =
+        cat.name.toLowerCase().includes(q) ||
+        cat.id.toLowerCase().includes(q) ||
+        (cat.description || '').toLowerCase().includes(q);
+      const matchingTools = allCatTools.filter(t =>
+        t.name.toLowerCase().includes(q) ||
+        (t.description || '').toLowerCase().includes(q) ||
+        (t.badge || '').toLowerCase().includes(q)
+      );
+      const visible = catMatches || matchingTools.length > 0;
+      const visibleTools = matchingTools.length > 0 ? matchingTools : allCatTools;
+      const autoExpand = matchingTools.length > 0 && (!catMatches || matchingTools.length < allCatTools.length);
+      const isExpanded = expandedCategories.has(cat.id) || (autoExpand && !filterOverrideCollapsed.has(cat.id));
+      return { q, allCatTools, visibleTools, catMatches, visible, isExpanded };
+    }
+
+    function onToolFilterChange(val) {
+      toolFilterQuery = val || '';
+      filterOverrideCollapsed.clear();
+      renderCategoriesGrid();
+    }
+
+    function clearToolFilter() {
+      toolFilterQuery = '';
+      filterOverrideCollapsed.clear();
+      const input = document.getElementById('tool-filter-input');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+      renderCategoriesGrid();
+    }
+
+    function toggleExpandCategory(catId) {
+      const cat = (STATE && STATE.categories || []).find(c => c.id === catId);
+      const currentlyExpanded = cat ? getCatFilterInfo(cat).isExpanded : expandedCategories.has(catId);
+      if (currentlyExpanded) {
+        expandedCategories.delete(catId);
+        if (toolFilterQuery) filterOverrideCollapsed.add(catId);
+      } else {
+        expandedCategories.add(catId);
+        filterOverrideCollapsed.delete(catId);
+      }
+      renderCategoriesGrid();
+    }
+
+    function toggleExpandAllCategories() {
+      if (!STATE || !STATE.categories) return;
+      const allExpanded = STATE.categories.every(c => expandedCategories.has(c.id));
+      if (allExpanded) {
+        expandedCategories.clear();
+        STATE.categories.forEach(c => filterOverrideCollapsed.add(c.id));
+      } else {
+        filterOverrideCollapsed.clear();
+        STATE.categories.forEach(c => expandedCategories.add(c.id));
+      }
+      renderCategoriesGrid();
+    }
+
     function renderInstanceEditor() {
       const inst = STATE.instances[activeInstanceId];
       if (!inst) return;
@@ -1090,53 +1379,159 @@
       sbEl.style.color = hasSandbox ? 'var(--warning)' : 'var(--success)';
       document.getElementById('stat-sandbox-sub').textContent = hasSandbox ? 'AST + timeout guarded' : 'Strict read-only mode';
 
-      // Render categories
+      renderCategoriesGrid();
+    }
+
+    function renderCategoriesGrid() {
+      const inst = STATE && STATE.instances[activeInstanceId];
       const catContainer = document.getElementById('categories-container');
+      if (!catContainer || !inst) return;
+
+      const filterInput = document.getElementById('tool-filter-input');
+      if (filterInput && document.activeElement !== filterInput && filterInput.value !== toolFilterQuery) {
+        filterInput.value = toolFilterQuery;
+      }
+      const clearBtn = document.getElementById('tool-filter-clear');
+      if (clearBtn) {
+        clearBtn.style.display = toolFilterQuery.trim() ? 'inline-block' : 'none';
+      }
+
+      const allowedSet = new Set(inst.allowed_tools || []);
       catContainer.innerHTML = '';
 
+      let shownCategories = 0;
+      let shownTools = 0;
+
       STATE.categories.forEach(cat => {
-        const catTools = STATE.tools.filter(t => t.category === cat.id);
-        const enabledInCat = catTools.filter(t => allowedSet.has(t.name)).length;
-        const allEnabled = enabledInCat === catTools.length;
+        const info = getCatFilterInfo(cat);
+        if (!info.visible) return;
 
-        const block = document.createElement('div');
-        block.className = 'category-block';
-        block.innerHTML = `
-          <div class="category-header">
-            <div class="category-info">
-              <h4>${cat.name} <span style="color:var(--text-muted); font-weight:500; font-size:12px;">(${enabledInCat}/${catTools.length})</span></h4>
-              <p>${cat.description}</p>
-            </div>
-            <button class="btn btn-sm" onclick="toggleCategory('${cat.id}', ${!allEnabled})">
-              ${allEnabled ? 'Disable Category' : 'Enable Category'}
-            </button>
-          </div>
-          <div class="tools-grid" id="cat-grid-${cat.id}"></div>
-        `;
-        catContainer.appendChild(block);
+        const { allCatTools, visibleTools, isExpanded, q } = info;
+        shownCategories++;
+        shownTools += visibleTools.length;
 
-        const grid = block.querySelector(`#cat-grid-${cat.id}`);
-        catTools.forEach(tool => {
-          const isOn = allowedSet.has(tool.name);
-          const card = document.createElement('div');
-          card.className = 'tool-card' + (isOn ? ' enabled' : '');
-          card.onclick = () => toggleTool(tool.name);
+        const enabledInCat = allCatTools.filter(t => allowedSet.has(t.name)).length;
+        const allEnabled = allCatTools.length > 0 && enabledInCat === allCatTools.length;
+        const someEnabled = enabledInCat > 0 && !allEnabled;
+        const catTokens = allCatTools.reduce((acc, t) => acc + t.tokens, 0);
+
+        const stateClass = allEnabled ? ' selected' : (someEnabled ? ' partial' : '');
+        const statusLabel = allEnabled
+          ? `✓ Selected · ${enabledInCat}/${allCatTools.length} tools`
+          : (someEnabled ? `Partial · ${enabledInCat}/${allCatTools.length} tools` : `0/${allCatTools.length} tools`);
+
+        const card = document.createElement('div');
+        card.className = `category-card${stateClass}${isExpanded ? ' expanded' : ''}`;
+        card.setAttribute('data-category-id', cat.id);
+        card.setAttribute('aria-selected', allEnabled ? 'true' : 'false');
+
+        if (!isExpanded) {
+          // Zoho-style collapsed category card: clicking selects/deselects the category and all its tools.
+          // Hovering shows the edit icon; clicking edit expands the card to show individual tools.
+          card.onclick = () => toggleCategory(cat.id, !allEnabled);
           card.innerHTML = `
-            <div>
-              <div class="tool-card-top">
-                <span class="tool-name">${tool.name}</span>
-                <input type="checkbox" ${isOn ? 'checked' : ''} onclick="event.stopPropagation(); toggleTool('${tool.name}');" />
+            <div class="category-card-top">
+              <div class="category-card-title">
+                <span>${cat.name}</span>
               </div>
-              <div class="tool-desc" style="margin-top:5px;">${tool.description}</div>
+              <button
+                type="button"
+                class="category-edit-btn"
+                title="Customize tools in ${cat.name}"
+                aria-label="Edit tools in ${cat.name}"
+                onclick="event.stopPropagation(); toggleExpandCategory('${cat.id}');"
+              ><span aria-hidden="true">✎</span><span>Edit</span></button>
             </div>
-            <div class="tool-meta">
-              <span class="tool-badge ${tool.badge}">${tool.badge}</span>
-              <span>~${tool.tokens} tokens</span>
+            <div class="category-card-desc">${cat.description}</div>
+            <div class="category-card-footer">
+              <span class="cat-status-pill">${statusLabel}</span>
+              <span>~${catTokens} tok</span>
             </div>
           `;
-          grid.appendChild(card);
-        });
+          catContainer.appendChild(card);
+        } else {
+          // Expanded category card showing all (or filtered) tools in this category
+          card.innerHTML = `
+            <div class="category-expanded-header">
+              <div style="display:flex; flex-direction:column; gap:2px;">
+                <div class="category-card-title">
+                  <span>${cat.name}</span>
+                  <span class="cat-status-pill">${statusLabel}</span>
+                  ${q && visibleTools.length < allCatTools.length ? `<span style="font-size:11px; color:var(--accent); font-family:var(--font-mono);">${visibleTools.length} matching filter</span>` : ''}
+                </div>
+                <div class="category-card-desc">${cat.description}</div>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <button
+                  type="button"
+                  class="btn btn-sm${allEnabled ? '' : ' btn-primary'}"
+                  onclick="event.stopPropagation(); toggleCategory('${cat.id}', ${!allEnabled});"
+                >${allEnabled ? 'Deselect Category' : 'Select All Tools'}</button>
+                <button
+                  type="button"
+                  class="category-edit-btn"
+                  title="Collapse ${cat.name}"
+                  aria-label="Collapse ${cat.name}"
+                  onclick="event.stopPropagation(); toggleExpandCategory('${cat.id}');"
+                ><span aria-hidden="true">✎</span><span>Done</span></button>
+              </div>
+            </div>
+            <div class="tools-grid" id="cat-grid-${cat.id}"></div>
+          `;
+          catContainer.appendChild(card);
+
+          const grid = card.querySelector(`#cat-grid-${cat.id}`);
+          visibleTools.forEach(tool => {
+            const isOn = allowedSet.has(tool.name);
+            const toolEl = document.createElement('div');
+            toolEl.className = 'tool-card' + (isOn ? ' enabled' : '');
+            toolEl.setAttribute('aria-selected', isOn ? 'true' : 'false');
+            toolEl.onclick = (e) => {
+              e.stopPropagation();
+              toggleTool(tool.name);
+            };
+            toolEl.innerHTML = `
+              <div>
+                <div class="tool-card-top">
+                  <span class="tool-name">${tool.name}</span>
+                  <span class="tool-state-pill">${isOn ? '✓ Enabled' : 'Off'}</span>
+                </div>
+                <div class="tool-desc" style="margin-top:5px;">${tool.description}</div>
+              </div>
+              <div class="tool-meta">
+                <span class="tool-badge ${tool.badge}">${tool.badge}</span>
+                <span>~${tool.tokens} tok</span>
+              </div>
+            `;
+            grid.appendChild(toolEl);
+          });
+        }
       });
+
+      if (shownCategories === 0) {
+        const emptyEl = document.createElement('div');
+        emptyEl.style.cssText = 'grid-column: 1 / -1; padding: 28px 16px; text-align: center; color: var(--text-muted); background: var(--bg-panel); border: 1px dashed var(--border); border-radius: 10px; display: flex; flex-direction: column; align-items: center; gap: 10px;';
+        emptyEl.innerHTML = `
+          <div>No tool categories or tools match <strong>"${toolFilterQuery.replace(/</g, '&lt;')}"</strong>.</div>
+          <button type="button" class="btn btn-sm" onclick="clearToolFilter()">Clear Filter</button>
+        `;
+        catContainer.appendChild(emptyEl);
+      }
+
+      const summaryEl = document.getElementById('tool-filter-summary');
+      if (summaryEl) {
+        if (toolFilterQuery.trim()) {
+          summaryEl.textContent = `Showing ${shownCategories}/${STATE.categories.length} categories · ${shownTools} matching tools`;
+        } else {
+          summaryEl.textContent = `${STATE.categories.length} categories · ${STATE.tools.length} tools (click card to select, ✎ to edit)`;
+        }
+      }
+
+      const expandAllBtn = document.getElementById('btn-expand-collapse-all');
+      if (expandAllBtn) {
+        const allExp = STATE.categories.every(c => expandedCategories.has(c.id));
+        expandAllBtn.textContent = allExp ? 'Collapse All' : 'Expand All';
+      }
     }
 
     function toggleTool(toolName) {

@@ -185,6 +185,10 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             assert "toggleTheme()" in html
             assert 'id="new-inst-default-template"' in html
             assert "restoreDefaultInstances" in html
+            assert 'id="tool-filter-input"' in html
+            assert "onToolFilterChange" in html
+            assert "category-edit-btn" in html
+            assert "toggleExpandCategory" in html
 
         # 2. GET /api/state returns full state including default_instance_templates
         with urllib.request.urlopen(f"{base_url}/api/state", timeout=5) as resp:
