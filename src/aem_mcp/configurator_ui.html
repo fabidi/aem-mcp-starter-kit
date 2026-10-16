@@ -1159,6 +1159,8 @@
     let STATE = null;
     let SAVED_INSTANCES = {};
     let SAVED_ENVIRONMENTS = {};
+    let TOOL_BIT_MAP = new Map();
+    let PRESET_MASK_TO_ID = new Map();
     let activeInstanceId = null;
     let activeEnvId = null;
     let sidebarMode = 'instances';
@@ -1169,8 +1171,54 @@
     const THEME_STORAGE_KEY = 'aem_mcp_theme';
     const INSTANCE_ORDER_STORAGE_KEY = 'aem_mcp_instance_order';
 
+    function buildToolsetMaskIndex() {
+      TOOL_BIT_MAP.clear();
+      PRESET_MASK_TO_ID.clear();
+      if (!STATE || !Array.isArray(STATE.tools)) return;
+      for (let i = 0; i < STATE.tools.length; i++) {
+        TOOL_BIT_MAP.set(STATE.tools[i].name, 1n << BigInt(i));
+      }
+      if (STATE.presets) {
+        const presetList = Object.values(STATE.presets);
+        for (let i = 0; i < presetList.length; i++) {
+          const p = presetList[i];
+          if (!p || p.id === 'custom') continue;
+          const mask = computeToolsetMask(p.tools || []);
+          PRESET_MASK_TO_ID.set(mask, p.id);
+        }
+      }
+    }
+
+    function computeToolsetMask(toolNames) {
+      if (!Array.isArray(toolNames) || toolNames.length === 0) return 0n;
+      if (TOOL_BIT_MAP.size === 0 && STATE) buildToolsetMaskIndex();
+      let mask = 0n;
+      for (let i = 0; i < toolNames.length; i++) {
+        const bit = TOOL_BIT_MAP.get(toolNames[i]);
+        if (bit !== undefined) mask |= bit;
+      }
+      return mask;
+    }
+
+    function detectMatchingPreset(toolNames) {
+      if (PRESET_MASK_TO_ID.size === 0 && STATE) buildToolsetMaskIndex();
+      const mask = computeToolsetMask(toolNames);
+      return PRESET_MASK_TO_ID.get(mask) || 'custom';
+    }
+
+    function syncInstancePresetFromTools(inst) {
+      if (!inst) return 'custom';
+      const matched = detectMatchingPreset(inst.allowed_tools || []);
+      inst.role_preset = matched;
+      return matched;
+    }
+
     function syncSavedBaseline() {
       if (!STATE) return;
+      buildToolsetMaskIndex();
+      if (STATE.instances) {
+        Object.values(STATE.instances).forEach(inst => syncInstancePresetFromTools(inst));
+      }
       SAVED_INSTANCES = JSON.parse(JSON.stringify(STATE.instances || {}));
       SAVED_ENVIRONMENTS = JSON.parse(JSON.stringify(STATE.environments || {}));
     }
@@ -1187,14 +1235,12 @@
       const curId = ((idEl && document.activeElement === idEl ? idEl.value : inst.id) || '').trim().toLowerCase();
       const curName = ((nameEl && document.activeElement === nameEl ? nameEl.value : inst.name) || '').trim();
       const curEnv = (envEl && document.activeElement === envEl ? envEl.value : inst.environment) || '';
-      const curPreset = (presetEl && document.activeElement === presetEl ? presetEl.value : inst.role_preset) || 'blank';
+      const curPreset = (presetEl && document.activeElement === presetEl ? presetEl.value : inst.role_preset) || 'custom';
       if (curId !== (saved.id || '').trim().toLowerCase()) return true;
       if (curName !== (saved.name || '').trim()) return true;
       if (curEnv !== (saved.environment || '')) return true;
-      if (curPreset !== (saved.role_preset || 'blank')) return true;
-      const curTools = [...(inst.allowed_tools || [])].sort().join(',');
-      const savTools = [...(saved.allowed_tools || [])].sort().join(',');
-      return curTools !== savTools;
+      if (curPreset !== (saved.role_preset || 'custom')) return true;
+      return computeToolsetMask(inst.allowed_tools) !== computeToolsetMask(saved.allowed_tools);
     }
 
     function isCurrentEnvironmentDirty() {
@@ -1539,10 +1585,22 @@
         document.getElementById('new-inst-preset'),
         document.getElementById('batch-preset')
       ];
+      const activeInst = STATE && STATE.instances && STATE.instances[activeInstanceId];
+      const activeToolCount = activeInst && Array.isArray(activeInst.allowed_tools) ? activeInst.allowed_tools.length : 0;
+
       presetSelects.forEach(sel => {
         if (!sel) return;
         const val = sel.value;
         sel.innerHTML = '';
+        if (sel.id === 'inst-preset') {
+          const customOpt = document.createElement('option');
+          customOpt.value = 'custom';
+          customOpt.id = 'inst-preset-custom-opt';
+          customOpt.textContent = activeInst && activeInst.role_preset === 'custom'
+            ? `Custom (${activeToolCount} tools)`
+            : 'Custom';
+          sel.appendChild(customOpt);
+        }
         Object.values(STATE.presets).forEach(p => {
           const opt = document.createElement('option');
           opt.value = p.id;
@@ -1655,6 +1713,9 @@
       const inst = STATE.instances[activeInstanceId];
       if (!inst) return;
 
+      const resolvedPreset = syncInstancePresetFromTools(inst);
+      const allowedSet = new Set(inst.allowed_tools || []);
+
       document.getElementById('active-inst-title').textContent = inst.name;
       const badge = document.getElementById('active-inst-env-badge');
       badge.className = envBadgeClass(inst.environment);
@@ -1665,16 +1726,25 @@
       if (idEl && document.activeElement !== idEl) idEl.value = inst.id;
       if (nameEl && document.activeElement !== nameEl) nameEl.value = inst.name;
       document.getElementById('inst-env').value = inst.environment;
-      document.getElementById('inst-preset').value = inst.role_preset || 'blank';
 
-      const allowedSet = new Set(inst.allowed_tools || []);
+      const presetEl = document.getElementById('inst-preset');
+      const customOptEl = document.getElementById('inst-preset-custom-opt');
+      if (customOptEl) {
+        customOptEl.textContent = resolvedPreset === 'custom'
+          ? `Custom (${allowedSet.size} tools)`
+          : 'Custom';
+      }
+      if (presetEl) {
+        presetEl.value = resolvedPreset;
+      }
+
       const totalTools = STATE.tools.length;
       const fullTokens = STATE.tools.reduce((acc, t) => acc + t.tokens, 0);
       const activeTokens = STATE.tools.filter(t => allowedSet.has(t.name)).reduce((acc, t) => acc + t.tokens, 0);
       const savedPct = fullTokens ? Math.round((1 - activeTokens / fullTokens) * 100) : 0;
 
       document.getElementById('stat-tools-count').textContent = `${allowedSet.size} / ${totalTools}`;
-      document.getElementById('stat-tools-pct').textContent = `Preset: ${inst.role_preset || 'custom'}`;
+      document.getElementById('stat-tools-pct').textContent = `Preset: ${resolvedPreset}`;
       document.getElementById('stat-tokens').textContent = `~${activeTokens.toLocaleString()} tok`;
       document.getElementById('stat-tokens-saved').textContent = savedPct > 0 ? `${savedPct}% context reduction vs Full` : `Full tool schema loaded`;
 
@@ -1850,6 +1920,7 @@
       if (set.has(toolName)) set.delete(toolName);
       else set.add(toolName);
       inst.allowed_tools = STATE.tools.map(t => t.name).filter(n => set.has(n));
+      syncInstancePresetFromTools(inst);
       renderAll();
     }
 
@@ -1862,6 +1933,7 @@
         else set.delete(t.name);
       });
       inst.allowed_tools = STATE.tools.map(t => t.name).filter(n => set.has(n));
+      syncInstancePresetFromTools(inst);
       renderAll();
     }
 
@@ -1882,6 +1954,7 @@
 
     function onPresetChange() {
       const presetId = document.getElementById('inst-preset').value;
+      if (presetId === 'custom') return;
       applyPresetToCurrent(presetId);
     }
 
@@ -1890,8 +1963,8 @@
       if (!inst) return;
       const preset = STATE.presets[presetId];
       if (!preset) return;
-      inst.role_preset = presetId;
       inst.allowed_tools = [...preset.tools];
+      syncInstancePresetFromTools(inst);
       renderAll();
     }
 
@@ -1899,12 +1972,13 @@
       const inst = STATE.instances[activeInstanceId];
       if (!inst || !isCurrentInstanceDirty()) return;
       const newId = document.getElementById('inst-id').value.trim().toLowerCase();
+      const syncedPreset = syncInstancePresetFromTools(inst);
       const payload = {
         ...inst,
         id: newId,
         name: document.getElementById('inst-name').value.trim(),
         environment: document.getElementById('inst-env').value,
-        role_preset: document.getElementById('inst-preset').value,
+        role_preset: syncedPreset,
       };
       try {
         const res = await fetch('/api/instances', {

@@ -520,6 +520,31 @@ ROLE_PRESETS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Precomputed O(1) bitmask lookup table for fast preset matching
+_TOOL_BIT_INDEX: dict[str, int] = {name: (1 << idx) for idx, name in enumerate(ALL_TOOL_NAMES)}
+
+
+def compute_toolset_mask(tools: list[str] | set[str]) -> int:
+    """Encode a tool list/set into a single integer bitmask in O(k) bitwise OR passes."""
+    mask = 0
+    for name in tools:
+        mask |= _TOOL_BIT_INDEX.get(name, 0)
+    return mask
+
+
+_PRESET_MASK_TO_ID: dict[int, str] = {
+    compute_toolset_mask(preset["tools"]): preset_id
+    for preset_id, preset in ROLE_PRESETS.items()
+}
+
+
+def detect_matching_preset(tools: list[str] | set[str]) -> str:
+    """
+    Fast O(1) bitmask hash-map lookup that matches a toolset to its exact role preset ID,
+    or returns 'custom' when the toolset has been customized away from all standard presets.
+    """
+    return _PRESET_MASK_TO_ID.get(compute_toolset_mask(tools), "custom")
+
 
 def _default_instances() -> dict[str, dict[str, Any]]:
     """Pre-seeded multi-environment instances demonstrating role x environment scoping."""
@@ -680,9 +705,11 @@ class ConfiguratorStore:
         if raw_tools is None:
             preset_obj = ROLE_PRESETS.get(role_preset, ROLE_PRESETS["blank"])
             allowed_tools = list(preset_obj["tools"])
+            role_preset = detect_matching_preset(allowed_tools)
         else:
             valid_set = set(ALL_TOOL_NAMES)
             allowed_tools = [t for t in raw_tools if t in valid_set]
+            role_preset = detect_matching_preset(allowed_tools)
 
         entry = {
             "id": inst_id,
@@ -931,7 +958,21 @@ def _load_ui_html() -> str:
     ui_path = Path(__file__).parent / "configurator_ui.html"
     if ui_path.exists():
         raw = ui_path.read_text(encoding="utf-8")
-        return "\n".join(line.lstrip() for line in raw.splitlines() if line.strip())
+        compact = re.sub(r"<!--.*?-->", "", raw, flags=re.DOTALL)
+        compact = re.sub(r"/\*.*?\*/", "", compact, flags=re.DOTALL)
+
+        def _minify_style(m: re.Match[str]) -> str:
+            css = re.sub(r"\s+", " ", m.group(1)).strip()
+            css = re.sub(r"\s*([{:;,}])\s*", r"\1", css)
+            return f"<style>{css}</style>"
+
+        compact = re.sub(r"<style>(.*?)</style>", _minify_style, compact, flags=re.DOTALL)
+        lines = [
+            line.strip()
+            for line in compact.splitlines()
+            if line.strip() and not line.strip().startswith("//")
+        ]
+        return "\n".join(lines)
     return "<html><body><h1>Configurator UI file missing</h1></body></html>"
 
 
@@ -1054,6 +1095,12 @@ def create_configurator_handler(store: ConfiguratorStore | None = None):
                     break
                 sent += n
             self.wfile.flush()
+            try:
+                self.connection.settimeout(0.25)
+                while self.connection.recv(256):
+                    pass
+            except Exception:
+                pass
 
         def _send_json(self, status: int, data: dict[str, Any]) -> None:
             raw = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

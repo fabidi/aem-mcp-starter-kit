@@ -21,7 +21,9 @@ from aem_mcp.configurator import (
     TOOL_CATALOG,
     TOOL_CATEGORIES,
     ConfiguratorStore,
+    compute_toolset_mask,
     create_configurator_handler,
+    detect_matching_preset,
 )
 
 
@@ -41,6 +43,14 @@ def test_default_environments_and_catalog(tmp_path: Path):
     assert "developer-readonly" in ROLE_PRESETS
     assert len(DEFAULT_INSTANCE_TEMPLATES) == 6
 
+    # Verify O(1) bitmask preset matcher across all built-in presets and custom subsets
+    for preset_id, preset in ROLE_PRESETS.items():
+        assert detect_matching_preset(preset["tools"]) == preset_id
+        assert detect_matching_preset(list(reversed(preset["tools"]))) == preset_id
+    custom_subset = ROLE_PRESETS["developer"]["tools"][:-1]
+    assert detect_matching_preset(custom_subset) == "custom"
+    assert compute_toolset_mask(["aem_json", "aem_traverse"]) == compute_toolset_mask(["aem_traverse", "aem_json"])
+
 
 def test_create_instance_from_scratch_and_from_preset(tmp_path: Path):
     """Verify creating custom MCP configs both from scratch (blank) and from role presets."""
@@ -54,17 +64,19 @@ def test_create_instance_from_scratch_and_from_preset(tmp_path: Path):
         "environment": "qa",
     })
     assert blank_inst["allowed_tools"] == []
+    assert blank_inst["role_preset"] == "blank"
     assert (tmp_path / "profiles" / "aem-scratch-qa.json").exists()
 
-    # 2. Customize the scratch instance with 3 hand-picked tools
+    # 2. Customize the scratch instance with 3 hand-picked tools -> role_preset auto-syncs to 'custom'
     custom_inst = store.upsert_instance({
         "id": "aem-scratch-qa",
         "name": "Custom Scratch QA Agent",
-        "role_preset": "blank",
+        "role_preset": "developer",
         "environment": "qa",
         "allowed_tools": ["aem_json", "aem_querybuilder", "aem_lint_query_indexing"],
     })
     assert custom_inst["allowed_tools"] == ["aem_json", "aem_querybuilder", "aem_lint_query_indexing"]
+    assert custom_inst["role_preset"] == "custom"
 
     # 3. Create from a role preset (content-author on stg)
     author_stg = store.upsert_instance({
@@ -74,6 +86,7 @@ def test_create_instance_from_scratch_and_from_preset(tmp_path: Path):
         "environment": "stg",
     })
     assert set(author_stg["allowed_tools"]) == set(ROLE_PRESETS["content-author"]["tools"])
+    assert author_stg["role_preset"] == "content-author"
     assert "execute_code" not in author_stg["allowed_tools"]
     assert "aem_lint_query_indexing" not in author_stg["allowed_tools"]
 
@@ -154,6 +167,7 @@ def test_batch_clone_role_across_environments(tmp_path: Path):
     assert "execute_code" in store.instances["aem-lead-dev-dev"]["allowed_tools"]
     assert "execute_code" in store.instances["aem-lead-dev-stg"]["allowed_tools"]
     assert "execute_code" not in store.instances["aem-lead-dev-prod"]["allowed_tools"]
+    assert store.instances["aem-lead-dev-prod"]["role_preset"] == "developer-readonly"
 
     # Verify client config generation for those instances
     client_cfg = store.generate_client_config(created_ids)
@@ -195,6 +209,9 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             assert 'id="btn-save-instance"' in html
             assert '>Save</button>' in html
             assert "isCurrentInstanceDirty" in html
+            assert "detectMatchingPreset" in html
+            assert "computeToolsetMask" in html
+            assert "inst-preset-custom-opt" in html
 
         # 2. GET /api/state returns full state including default_instance_templates
         with urllib.request.urlopen(f"{base_url}/api/state", timeout=5) as resp:
@@ -240,6 +257,7 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             res = json.loads(resp.read().decode("utf-8"))
             assert res["success"] is True
             assert res["instance"]["allowed_tools"] == ["aem_json", "aem_querybuilder", "aem_lint_query_indexing"]
+            assert res["instance"]["role_preset"] == "custom"
 
         # 5. Delete a default instance and recreate it via POST /api/instances/restore-defaults
         del_req = urllib.request.Request(
