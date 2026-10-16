@@ -192,6 +192,9 @@ def test_configurator_http_server_endpoints(tmp_path: Path):
             assert '<h3 id="main-panel-title">Details</h3>' in html
             assert "reorderInstances" in html
             assert "drag-handle" in html
+            assert 'id="btn-save-instance"' in html
+            assert '>Save</button>' in html
+            assert "isCurrentInstanceDirty" in html
 
         # 2. GET /api/state returns full state including default_instance_templates
         with urllib.request.urlopen(f"{base_url}/api/state", timeout=5) as resp:

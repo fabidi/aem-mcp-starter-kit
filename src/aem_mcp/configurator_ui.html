@@ -140,30 +140,45 @@
       border: 1px solid var(--border);
       background: var(--bg-card);
       color: var(--text-main);
+      white-space: nowrap;
+      flex-shrink: 0;
       transition: all 0.15s ease;
     }
-    .btn:hover { background: var(--bg-card-hover); border-color: var(--border-hover); }
+    .btn:hover:not(:disabled) { background: var(--bg-card-hover); border-color: var(--border-hover); }
     .btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+    .btn:disabled,
+    .btn[disabled] {
+      opacity: 0.42;
+      cursor: not-allowed;
+      pointer-events: none;
+      filter: saturate(0.35);
+    }
     .btn-primary {
       background: var(--accent);
       border-color: var(--accent);
       color: #fff;
     }
-    .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
     .btn-danger {
       background: rgba(239, 68, 68, 0.12);
       border-color: rgba(239, 68, 68, 0.35);
       color: var(--danger);
     }
-    .btn-danger:hover { background: rgba(239, 68, 68, 0.22); }
-    .btn-sm { padding: 4px 9px; font-size: 11.5px; }
+    .btn-danger:hover:not(:disabled) { background: rgba(239, 68, 68, 0.22); }
+    .btn-sm { padding: 5px 10px; font-size: 11.5px; }
 
     /* Main 3-Column Layout */
     .workspace {
       display: grid;
-      grid-template-columns: 300px 1fr 390px;
+      grid-template-columns: 285px minmax(0, 1fr) 365px;
       flex: 1;
+      min-height: 0;
       overflow: hidden;
+    }
+    @media (max-width: 1200px) {
+      .workspace {
+        grid-template-columns: 250px minmax(0, 1fr) 320px;
+      }
     }
 
     /* Left Sidebar */
@@ -172,6 +187,8 @@
       border-right: 1px solid var(--border);
       display: flex;
       flex-direction: column;
+      min-width: 0;
+      min-height: 0;
       overflow: hidden;
     }
     .nav-tabs {
@@ -179,12 +196,14 @@
       grid-template-columns: 1fr 1fr;
       border-bottom: 1px solid var(--border);
       background: var(--bg-subtle);
+      flex-shrink: 0;
     }
     .nav-tab {
-      padding: 11px 12px;
+      padding: 11px 8px;
       text-align: center;
       font-weight: 600;
-      font-size: 12.5px;
+      font-size: 12px;
+      white-space: nowrap;
       color: var(--text-muted);
       cursor: pointer;
       border-bottom: 2px solid transparent;
@@ -195,21 +214,27 @@
       background: var(--bg-panel);
     }
     .sidebar-header {
-      padding: 12px 14px;
+      padding: 10px 12px;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 8px;
       border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
     }
     .sidebar-header h3 {
-      font-size: 11.5px;
+      font-size: 11px;
       text-transform: uppercase;
-      letter-spacing: 0.6px;
+      letter-spacing: 0.5px;
       color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .sidebar-list {
       flex: 1;
       overflow-y: auto;
+      overflow-x: hidden;
       padding: 10px;
       display: flex;
       flex-direction: column;
@@ -223,6 +248,7 @@
       cursor: pointer;
       transition: all 0.12s ease;
       position: relative;
+      min-width: 0;
     }
     .list-item[draggable="true"] {
       cursor: grab;
@@ -265,6 +291,7 @@
       justify-content: space-between;
       gap: 6px;
       margin-bottom: 4px;
+      min-width: 0;
     }
     .list-item-title {
       font-weight: 600;
@@ -277,10 +304,12 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 6px;
       color: var(--text-muted);
       font-size: 11.5px;
       font-family: var(--font-mono);
       font-variant-numeric: tabular-nums;
+      min-width: 0;
     }
 
     /* Environment Tier Badges */
@@ -304,22 +333,19 @@
     .main-editor {
       display: flex;
       flex-direction: column;
-      overflow-y: auto;
-      padding: 0 24px 20px 24px;
-      gap: 16px;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
     }
     .main-panel-header {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      margin: 0 -24px;
-      padding: 14px 24px;
+      padding: 13px 20px;
       background: var(--bg-panel);
       border-bottom: 1px solid var(--border);
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+      flex-shrink: 0;
     }
     .main-panel-header h3 {
       font-size: 13.5px;
@@ -331,16 +357,26 @@
       font-size: 11.5px;
       color: var(--text-muted);
     }
+    .main-editor-body {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      padding: 16px 20px 24px 20px;
+      min-width: 0;
+    }
     .card {
       background: var(--bg-panel);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 16px 18px;
+      padding: 15px 16px;
+      min-width: 0;
     }
     .card-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
       margin-bottom: 14px;
       padding-bottom: 10px;
       border-bottom: 1px solid var(--border);
@@ -351,23 +387,33 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      min-width: 0;
+      flex: 1 1 auto;
     }
     .form-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
+      min-width: 0;
     }
     .form-group {
       display: flex;
       flex-direction: column;
       gap: 5px;
+      min-width: 0;
     }
     .form-group label {
       font-size: 11.5px;
       font-weight: 600;
       color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     input[type="text"], select {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
       background: var(--bg-input);
       border: 1px solid var(--border);
       color: var(--text-main);
@@ -376,6 +422,7 @@
       font-size: 12.5px;
       font-family: var(--font-sans);
       outline: none;
+      text-overflow: ellipsis;
     }
     input[type="text"]:focus, select:focus {
       border-color: var(--border-focus);
@@ -384,32 +431,49 @@
     /* Telemetry Strip */
     .stats-strip {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      min-width: 0;
+    }
+    @media (max-width: 1100px) {
+      .stats-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
     .stat-box {
       background: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 8px;
-      padding: 11px 14px;
+      padding: 10px 12px;
+      min-width: 0;
+      overflow: hidden;
     }
     .stat-label {
-      font-size: 11px;
+      font-size: 10.5px;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
       color: var(--text-muted);
       margin-bottom: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .stat-value {
-      font-size: 18px;
+      font-size: 17px;
       font-weight: 700;
       font-family: var(--font-mono);
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
     .stat-sub {
       font-size: 11px;
       color: var(--text-muted);
       margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     /* Tool Categories & Matrix (Zoho-style Collapsible Category Cards) */
@@ -423,12 +487,13 @@
       background: var(--bg-panel);
       border: 1px solid var(--border);
       border-radius: 10px;
-      padding: 10px 14px;
+      padding: 9px 12px;
+      min-width: 0;
     }
     .filter-input-wrap {
       position: relative;
-      flex: 1;
-      min-width: 240px;
+      flex: 1 1 220px;
+      min-width: 180px;
       display: flex;
       align-items: center;
     }
@@ -721,14 +786,16 @@
     }
     .code-container {
       flex: 1;
-      overflow: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
       padding: 14px 16px;
       background: var(--bg-code);
       font-family: var(--font-mono);
       font-size: 11.5px;
       line-height: 1.5;
       color: var(--text-code);
-      white-space: pre;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
     /* Modal */
@@ -817,8 +884,8 @@
 
       <div id="sidebar-instances-view" style="display:flex; flex-direction:column; flex:1; overflow:hidden;">
         <div class="sidebar-header">
-          <h3>Configured Instances</h3>
-          <div style="display:flex; gap:6px;">
+          <h3>Instances</h3>
+          <div style="display:flex; gap:6px; flex-shrink:0;">
             <button id="btn-restore-defaults" class="btn btn-sm" type="button" title="Recreate any deleted default built-in instances" onclick="restoreDefaultInstances()">↺ Defaults</button>
             <button class="btn btn-sm" type="button" onclick="openNewInstanceModal()">+ New</button>
           </div>
@@ -828,8 +895,8 @@
 
       <div id="sidebar-environments-view" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
         <div class="sidebar-header">
-          <h3>Environment Tiers</h3>
-          <button class="btn btn-sm" onclick="createNewEnvironment()">+ Add Env</button>
+          <h3>Environments</h3>
+          <button class="btn btn-sm" type="button" onclick="createNewEnvironment()">+ Add Env</button>
         </div>
         <div id="environment-list" class="sidebar-list"></div>
       </div>
@@ -838,154 +905,156 @@
     <!-- Center Workspace (Details Panel) -->
     <main class="main-editor">
       <div class="main-panel-header">
-        <div>
+        <div style="min-width:0;">
           <h3 id="main-panel-title">Details</h3>
           <p id="main-panel-subtitle">Configure instance settings, environment binding, and authorized tool categories</p>
         </div>
       </div>
 
-      <!-- Instance Editor View -->
-      <div id="editor-instance-view">
-        <div class="card" style="margin-bottom: 16px;">
-          <div class="card-header">
-            <div class="card-title">
-              <span id="active-inst-title">Instance Configuration</span>
-              <span id="active-inst-env-badge" class="env-badge env-dev">DEV</span>
+      <div class="main-editor-body">
+        <!-- Instance Editor View -->
+        <div id="editor-instance-view">
+          <div class="card" style="margin-bottom: 14px;">
+            <div class="card-header">
+              <div class="card-title">
+                <span id="active-inst-title" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Instance Configuration</span>
+                <span id="active-inst-env-badge" class="env-badge env-dev">DEV</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-sm" type="button" onclick="applyPresetToCurrent('blank')">Reset (0 Tools)</button>
+                <button class="btn btn-sm" type="button" onclick="duplicateCurrentInstance()">Clone</button>
+                <button class="btn btn-sm btn-danger" type="button" onclick="deleteCurrentInstance()">Delete</button>
+                <button id="btn-save-instance" class="btn btn-sm btn-primary" type="button" disabled onclick="saveCurrentInstance()">Save</button>
+              </div>
             </div>
-            <div style="display:flex; gap:8px;">
-              <button class="btn btn-sm" onclick="applyPresetToCurrent('blank')">Reset to Scratch (0 Tools)</button>
-              <button class="btn btn-sm" onclick="duplicateCurrentInstance()">Clone to Another Env</button>
-              <button class="btn btn-sm btn-danger" onclick="deleteCurrentInstance()">Delete</button>
-              <button class="btn btn-sm btn-primary" onclick="saveCurrentInstance()">💾 Save Instance</button>
+
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Instance ID (MCP Server Key)</label>
+                <input type="text" id="inst-id" oninput="onInstanceFieldChange()" />
+              </div>
+              <div class="form-group">
+                <label>Display Name</label>
+                <input type="text" id="inst-name" oninput="onInstanceFieldChange()" />
+              </div>
+              <div class="form-group">
+                <label>Target Environment Level</label>
+                <select id="inst-env" onchange="onInstanceFieldChange()"></select>
+              </div>
+              <div class="form-group">
+                <label>Base Role Preset (or Custom)</label>
+                <select id="inst-preset" onchange="onPresetChange()"></select>
+              </div>
             </div>
           </div>
 
-          <div class="form-grid">
-            <div class="form-group">
-              <label>Instance ID (MCP Server Key)</label>
-              <input type="text" id="inst-id" oninput="onInstanceFieldChange()" />
+          <!-- Telemetry Strip -->
+          <div class="stats-strip" style="margin-bottom: 14px;">
+            <div class="stat-box">
+              <div class="stat-label">Authorized Toolset</div>
+              <div class="stat-value" id="stat-tools-count">17 / 28</div>
+              <div class="stat-sub" id="stat-tools-pct">Scoped for active role</div>
             </div>
-            <div class="form-group">
-              <label>Display Name</label>
-              <input type="text" id="inst-name" oninput="onInstanceFieldChange()" />
+            <div class="stat-box">
+              <div class="stat-label">Est. Context Overhead</div>
+              <div class="stat-value" id="stat-tokens">~1,920 tok</div>
+              <div class="stat-sub" id="stat-tokens-saved">38% token reduction vs Full</div>
             </div>
-            <div class="form-group">
-              <label>Target Environment Level</label>
-              <select id="inst-env" onchange="onInstanceFieldChange()"></select>
+            <div class="stat-box">
+              <div class="stat-label">Target AEM Endpoint</div>
+              <div class="stat-value" id="stat-env-mode" style="font-size:14px;">mock</div>
+              <div class="stat-sub" id="stat-env-url">http://localhost:4502</div>
             </div>
-            <div class="form-group">
-              <label>Base Role Preset (or Custom)</label>
-              <select id="inst-preset" onchange="onPresetChange()"></select>
+            <div class="stat-box">
+              <div class="stat-label">Code Sandbox Status</div>
+              <div class="stat-value" id="stat-sandbox">Authorized</div>
+              <div class="stat-sub" id="stat-sandbox-sub">AST + timeout guarded</div>
             </div>
           </div>
+
+          <!-- Typeahead Filter & Category Toolbar -->
+          <div class="tools-toolbar">
+            <div class="filter-input-wrap">
+              <span class="filter-input-icon" aria-hidden="true">🔍</span>
+              <input
+                type="text"
+                id="tool-filter-input"
+                placeholder="Filter tool categories or tools by name, description, or badge (e.g. query, package, dataset)..."
+                aria-label="Filter tool categories and tools"
+                oninput="onToolFilterChange(this.value)"
+              />
+              <button
+                type="button"
+                id="tool-filter-clear"
+                class="filter-clear-btn"
+                title="Clear filter"
+                aria-label="Clear filter"
+                onclick="clearToolFilter()"
+              >✕</button>
+            </div>
+            <div class="filter-meta">
+              <span id="tool-filter-summary">7 categories · 35 tools</span>
+              <button type="button" class="btn btn-sm" id="btn-expand-collapse-all" onclick="toggleExpandAllCategories()">Expand All</button>
+            </div>
+          </div>
+
+          <!-- Zoho-Style Collapsible Category Cards Grid -->
+          <div id="categories-container" class="categories-grid"></div>
         </div>
 
-        <!-- Telemetry Strip -->
-        <div class="stats-strip" style="margin-bottom: 16px;">
-          <div class="stat-box">
-            <div class="stat-label">Authorized Toolset</div>
-            <div class="stat-value" id="stat-tools-count">17 / 28</div>
-            <div class="stat-sub" id="stat-tools-pct">Scoped for active role</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Est. Context Overhead</div>
-            <div class="stat-value" id="stat-tokens">~1,920 tok</div>
-            <div class="stat-sub" id="stat-tokens-saved">38% token reduction vs Full</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Target AEM Endpoint</div>
-            <div class="stat-value" id="stat-env-mode" style="font-size:14px; overflow:hidden; text-overflow:ellipsis;">mock</div>
-            <div class="stat-sub" id="stat-env-url">http://localhost:4502</div>
-          </div>
-          <div class="stat-box">
-            <div class="stat-label">Code Sandbox Status</div>
-            <div class="stat-value" id="stat-sandbox">Authorized</div>
-            <div class="stat-sub" id="stat-sandbox-sub">AST + timeout guarded</div>
-          </div>
-        </div>
-
-        <!-- Typeahead Filter & Category Toolbar -->
-        <div class="tools-toolbar">
-          <div class="filter-input-wrap">
-            <span class="filter-input-icon" aria-hidden="true">🔍</span>
-            <input
-              type="text"
-              id="tool-filter-input"
-              placeholder="Filter tool categories or tools by name, description, or badge (e.g. query, package, dataset)..."
-              aria-label="Filter tool categories and tools"
-              oninput="onToolFilterChange(this.value)"
-            />
-            <button
-              type="button"
-              id="tool-filter-clear"
-              class="filter-clear-btn"
-              title="Clear filter"
-              aria-label="Clear filter"
-              onclick="clearToolFilter()"
-            >✕</button>
-          </div>
-          <div class="filter-meta">
-            <span id="tool-filter-summary">7 categories · 35 tools</span>
-            <button type="button" class="btn btn-sm" id="btn-expand-collapse-all" onclick="toggleExpandAllCategories()">Expand All</button>
-          </div>
-        </div>
-
-        <!-- Zoho-Style Collapsible Category Cards Grid -->
-        <div id="categories-container" class="categories-grid"></div>
-      </div>
-
-      <!-- Environment Editor View -->
-      <div id="editor-environment-view" style="display:none;">
-        <div class="card">
-          <div class="card-header">
-            <div class="card-title">
-              <span>Environment Definition</span>
-              <span id="env-editor-badge" class="env-badge env-dev">DEV</span>
+        <!-- Environment Editor View -->
+        <div id="editor-environment-view" style="display:none;">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <span>Environment Definition</span>
+                <span id="env-editor-badge" class="env-badge env-dev">DEV</span>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-sm btn-danger" type="button" onclick="deleteCurrentEnvironment()">Delete Env</button>
+                <button id="btn-save-environment" class="btn btn-sm btn-primary" type="button" disabled onclick="saveCurrentEnvironment()">Save</button>
+              </div>
             </div>
-            <div style="display:flex; gap:8px;">
-              <button class="btn btn-sm btn-danger" onclick="deleteCurrentEnvironment()">Delete Env</button>
-              <button class="btn btn-sm btn-primary" onclick="saveCurrentEnvironment()">💾 Save Environment</button>
-            </div>
-          </div>
-          <div class="form-grid" style="grid-template-columns: repeat(2, 1fr);">
-            <div class="form-group">
-              <label>Environment ID (e.g. dev, int, qa, stg, prod)</label>
-              <input type="text" id="env-id" />
-            </div>
-            <div class="form-group">
-              <label>Display Name</label>
-              <input type="text" id="env-name" />
-            </div>
-            <div class="form-group">
-              <label>Connection Mode</label>
-              <select id="env-mode">
-                <option value="mock">mock (Offline JCR Simulator)</option>
-                <option value="onprem">onprem (AEM 6.5 / Basic Auth)</option>
-                <option value="cloud">cloud (AEMaaCS / Adobe IMS OAuth)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>AEM Author Base URL</label>
-              <input type="text" id="env-url" placeholder="https://author-pXXXX-eYYYY.adobeaemcloud.com" />
-            </div>
-            <div class="form-group">
-              <label>Default Domain Profile</label>
-              <select id="env-domain">
-                <option value="hospitality">hospitality (Novaria Hotels SQLite)</option>
-                <option value="automotive">automotive (Velocity Motors CSV)</option>
-                <option value="retail">retail (Maison Lumiere JSON)</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>Reference Entity Registry Facade</label>
-              <select id="env-registry">
-                <option value="true">Enabled (Include Demo Registry Facade)</option>
-                <option value="false">Disabled (Pure AEM Mode)</option>
-              </select>
-            </div>
-            <div class="form-group" style="grid-column: span 2;">
-              <label>Description</label>
-              <input type="text" id="env-desc" />
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Environment ID (e.g. dev, int, qa, stg, prod)</label>
+                <input type="text" id="env-id" oninput="onEnvironmentFieldChange()" />
+              </div>
+              <div class="form-group">
+                <label>Display Name</label>
+                <input type="text" id="env-name" oninput="onEnvironmentFieldChange()" />
+              </div>
+              <div class="form-group">
+                <label>Connection Mode</label>
+                <select id="env-mode" onchange="onEnvironmentFieldChange()">
+                  <option value="mock">mock (Offline JCR Simulator)</option>
+                  <option value="onprem">onprem (AEM 6.5 / Basic Auth)</option>
+                  <option value="cloud">cloud (AEMaaCS / Adobe IMS OAuth)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>AEM Author Base URL</label>
+                <input type="text" id="env-url" placeholder="https://author-pXXXX-eYYYY.adobeaemcloud.com" oninput="onEnvironmentFieldChange()" />
+              </div>
+              <div class="form-group">
+                <label>Default Domain Profile</label>
+                <select id="env-domain" onchange="onEnvironmentFieldChange()">
+                  <option value="hospitality">hospitality (Novaria Hotels SQLite)</option>
+                  <option value="automotive">automotive (Velocity Motors CSV)</option>
+                  <option value="retail">retail (Maison Lumiere JSON)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Reference Entity Registry Facade</label>
+                <select id="env-registry" onchange="onEnvironmentFieldChange()">
+                  <option value="true">Enabled (Include Demo Registry Facade)</option>
+                  <option value="false">Disabled (Pure AEM Mode)</option>
+                </select>
+              </div>
+              <div class="form-group" style="grid-column: span 2;">
+                <label>Description</label>
+                <input type="text" id="env-desc" oninput="onEnvironmentFieldChange()" />
+              </div>
             </div>
           </div>
         </div>
@@ -1088,6 +1157,8 @@
 
   <script>
     let STATE = null;
+    let SAVED_INSTANCES = {};
+    let SAVED_ENVIRONMENTS = {};
     let activeInstanceId = null;
     let activeEnvId = null;
     let sidebarMode = 'instances';
@@ -1097,6 +1168,72 @@
     let draggedInstanceId = null;
     const THEME_STORAGE_KEY = 'aem_mcp_theme';
     const INSTANCE_ORDER_STORAGE_KEY = 'aem_mcp_instance_order';
+
+    function syncSavedBaseline() {
+      if (!STATE) return;
+      SAVED_INSTANCES = JSON.parse(JSON.stringify(STATE.instances || {}));
+      SAVED_ENVIRONMENTS = JSON.parse(JSON.stringify(STATE.environments || {}));
+    }
+
+    function isCurrentInstanceDirty() {
+      const inst = STATE && STATE.instances && STATE.instances[activeInstanceId];
+      if (!inst) return false;
+      const saved = SAVED_INSTANCES[activeInstanceId];
+      if (!saved) return true;
+      const idEl = document.getElementById('inst-id');
+      const nameEl = document.getElementById('inst-name');
+      const envEl = document.getElementById('inst-env');
+      const presetEl = document.getElementById('inst-preset');
+      const curId = ((idEl && document.activeElement === idEl ? idEl.value : inst.id) || '').trim().toLowerCase();
+      const curName = ((nameEl && document.activeElement === nameEl ? nameEl.value : inst.name) || '').trim();
+      const curEnv = (envEl && document.activeElement === envEl ? envEl.value : inst.environment) || '';
+      const curPreset = (presetEl && document.activeElement === presetEl ? presetEl.value : inst.role_preset) || 'blank';
+      if (curId !== (saved.id || '').trim().toLowerCase()) return true;
+      if (curName !== (saved.name || '').trim()) return true;
+      if (curEnv !== (saved.environment || '')) return true;
+      if (curPreset !== (saved.role_preset || 'blank')) return true;
+      const curTools = [...(inst.allowed_tools || [])].sort().join(',');
+      const savTools = [...(saved.allowed_tools || [])].sort().join(',');
+      return curTools !== savTools;
+    }
+
+    function isCurrentEnvironmentDirty() {
+      const env = STATE && STATE.environments && STATE.environments[activeEnvId];
+      if (!env) return false;
+      const saved = SAVED_ENVIRONMENTS[activeEnvId];
+      if (!saved) return true;
+      const idVal = (document.getElementById('env-id')?.value || env.id || '').trim().toLowerCase();
+      const nameVal = (document.getElementById('env-name')?.value || env.name || '').trim();
+      const modeVal = document.getElementById('env-mode')?.value || env.mode || '';
+      const urlVal = (document.getElementById('env-url')?.value || env.aem_url || '').trim();
+      const domVal = document.getElementById('env-domain')?.value || env.default_domain || 'hospitality';
+      const regVal = (document.getElementById('env-registry')?.value || (env.enable_registry ? 'true' : 'false')) === 'true';
+      const descVal = (document.getElementById('env-desc')?.value ?? env.description ?? '').trim();
+      return (
+        idVal !== (saved.id || '').trim().toLowerCase() ||
+        nameVal !== (saved.name || '').trim() ||
+        modeVal !== (saved.mode || '') ||
+        urlVal !== (saved.aem_url || '').trim() ||
+        domVal !== (saved.default_domain || 'hospitality') ||
+        regVal !== Boolean(saved.enable_registry) ||
+        descVal !== (saved.description || '').trim()
+      );
+    }
+
+    function updateSaveButtonState() {
+      const saveInstBtn = document.getElementById('btn-save-instance');
+      if (saveInstBtn) {
+        const dirty = isCurrentInstanceDirty();
+        saveInstBtn.disabled = !dirty;
+        saveInstBtn.setAttribute('aria-disabled', dirty ? 'false' : 'true');
+      }
+      const saveEnvBtn = document.getElementById('btn-save-environment');
+      if (saveEnvBtn) {
+        const envDirty = isCurrentEnvironmentDirty();
+        saveEnvBtn.disabled = !envDirty;
+        saveEnvBtn.setAttribute('aria-disabled', envDirty ? 'false' : 'true');
+      }
+    }
 
     function getPreferredTheme() {
       try {
@@ -1201,6 +1338,7 @@
       }
       if (!STATE) return;
       applyStoredInstanceOrder();
+      syncSavedBaseline();
       const instKeys = Object.keys(STATE.instances);
       if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
         activeInstanceId = instKeys[0] || null;
@@ -1249,6 +1387,7 @@
         renderEnvironmentEditor();
       }
       renderExportConfig();
+      updateSaveButtonState();
     }
 
     function renderSidebarInstances() {
@@ -1521,8 +1660,10 @@
       badge.className = envBadgeClass(inst.environment);
       badge.textContent = inst.environment.toUpperCase();
 
-      document.getElementById('inst-id').value = inst.id;
-      document.getElementById('inst-name').value = inst.name;
+      const idEl = document.getElementById('inst-id');
+      const nameEl = document.getElementById('inst-name');
+      if (idEl && document.activeElement !== idEl) idEl.value = inst.id;
+      if (nameEl && document.activeElement !== nameEl) nameEl.value = inst.name;
       document.getElementById('inst-env').value = inst.environment;
       document.getElementById('inst-preset').value = inst.role_preset || 'blank';
 
@@ -1539,7 +1680,9 @@
 
       const envObj = STATE.environments[inst.environment] || STATE.environments.dev;
       document.getElementById('stat-env-mode').textContent = `${envObj.id.toUpperCase()} (${envObj.mode})`;
-      document.getElementById('stat-env-url').textContent = envObj.aem_url;
+      const urlEl = document.getElementById('stat-env-url');
+      urlEl.textContent = envObj.aem_url;
+      urlEl.title = envObj.aem_url;
 
       const hasSandbox = allowedSet.has('execute_code');
       const sbEl = document.getElementById('stat-sandbox');
@@ -1548,6 +1691,7 @@
       document.getElementById('stat-sandbox-sub').textContent = hasSandbox ? 'AST + timeout guarded' : 'Strict read-only mode';
 
       renderCategoriesGrid();
+      updateSaveButtonState();
     }
 
     function renderCategoriesGrid() {
@@ -1594,8 +1738,6 @@
         card.setAttribute('aria-selected', allEnabled ? 'true' : 'false');
 
         if (!isExpanded) {
-          // Zoho-style collapsed category card: clicking selects/deselects the category and all its tools.
-          // Hovering shows the edit icon; clicking edit expands the card to show individual tools.
           card.onclick = () => toggleCategory(cat.id, !allEnabled);
           card.innerHTML = `
             <div class="category-card-top">
@@ -1618,7 +1760,6 @@
           `;
           catContainer.appendChild(card);
         } else {
-          // Expanded category card showing all (or filtered) tools in this category
           card.innerHTML = `
             <div class="category-expanded-header">
               <div style="display:flex; flex-direction:column; gap:2px;">
@@ -1689,9 +1830,9 @@
       const summaryEl = document.getElementById('tool-filter-summary');
       if (summaryEl) {
         if (toolFilterQuery.trim()) {
-          summaryEl.textContent = `Showing ${shownCategories}/${STATE.categories.length} categories · ${shownTools} matching tools`;
+          summaryEl.textContent = `${shownCategories}/${STATE.categories.length} categories · ${shownTools} matching`;
         } else {
-          summaryEl.textContent = `${STATE.categories.length} categories · ${STATE.tools.length} tools (click card to select, ✎ to edit)`;
+          summaryEl.textContent = `${STATE.categories.length} categories · ${STATE.tools.length} tools`;
         }
       }
 
@@ -1732,6 +1873,11 @@
       renderSidebarInstances();
       renderInstanceEditor();
       renderExportConfig();
+      updateSaveButtonState();
+    }
+
+    function onEnvironmentFieldChange() {
+      updateSaveButtonState();
     }
 
     function onPresetChange() {
@@ -1751,7 +1897,7 @@
 
     async function saveCurrentInstance() {
       const inst = STATE.instances[activeInstanceId];
-      if (!inst) return;
+      if (!inst || !isCurrentInstanceDirty()) return;
       const newId = document.getElementById('inst-id').value.trim().toLowerCase();
       const payload = {
         ...inst,
@@ -1770,16 +1916,18 @@
         if (data.success) {
           STATE = { ...STATE, ...data.state };
           activeInstanceId = data.instance.id;
+          syncSavedBaseline();
           renderAll();
-          showToast(`Saved instance '${activeInstanceId}'`);
+          showToast(`Saved '${activeInstanceId}'`);
         } else {
           alert(data.error || 'Failed saving instance');
         }
       } catch (e) {
         STATE.instances[newId] = payload;
         activeInstanceId = newId;
+        syncSavedBaseline();
         renderAll();
-        showToast('Updated in preview state');
+        showToast('Saved in preview state');
       }
     }
 
@@ -1796,6 +1944,7 @@
       } catch (e) {
         delete STATE.instances[activeInstanceId];
       }
+      syncSavedBaseline();
       activeInstanceId = Object.keys(STATE.instances)[0] || null;
       renderAll();
       showToast('Instance deleted (can be recreated from template)');
@@ -1818,6 +1967,7 @@
           const data = await res.json();
           if (data.success && data.state) {
             STATE = { ...STATE, ...data.state };
+            syncSavedBaseline();
             if (targetIds.length > 0 && STATE.instances[targetIds[0]]) {
               activeInstanceId = targetIds[0];
             } else if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
@@ -1856,6 +2006,7 @@
         restoredCount++;
       }
 
+      syncSavedBaseline();
       if (targetIds.length > 0 && STATE.instances[targetIds[0]]) {
         activeInstanceId = targetIds[0];
       } else if (!activeInstanceId || !STATE.instances[activeInstanceId]) {
@@ -1879,6 +2030,7 @@
       document.getElementById('env-domain').value = env.default_domain || 'hospitality';
       document.getElementById('env-registry').value = env.enable_registry ? 'true' : 'false';
       document.getElementById('env-desc').value = env.description || '';
+      updateSaveButtonState();
     }
 
     function createNewEnvironment() {
@@ -1899,6 +2051,7 @@
     }
 
     async function saveCurrentEnvironment() {
+      if (!isCurrentEnvironmentDirty()) return;
       const payload = {
         id: document.getElementById('env-id').value.trim().toLowerCase(),
         name: document.getElementById('env-name').value.trim(),
@@ -1918,6 +2071,7 @@
         if (data.success) {
           STATE = { ...STATE, ...data.state };
           activeEnvId = data.environment.id;
+          syncSavedBaseline();
           renderAll();
           showToast(`Saved environment '${activeEnvId.toUpperCase()}'`);
         } else {
@@ -1926,6 +2080,7 @@
       } catch (e) {
         STATE.environments[payload.id] = payload;
         activeEnvId = payload.id;
+        syncSavedBaseline();
         renderAll();
         showToast('Saved environment in preview');
       }
@@ -1944,6 +2099,7 @@
       } catch (e) {
         delete STATE.environments[activeEnvId];
       }
+      syncSavedBaseline();
       activeEnvId = Object.keys(STATE.environments)[0] || 'dev';
       renderAll();
       showToast('Environment deleted');
@@ -2097,6 +2253,7 @@
             if (data.success) {
               STATE = { ...STATE, ...data.state };
               activeInstanceId = data.instance.id;
+              syncSavedBaseline();
               closeModals();
               switchSidebarTab('instances');
               showToast(`Recreated '${activeInstanceId}' from template '${tplId}'`);
@@ -2130,6 +2287,7 @@
         STATE.instances[id] = payload;
         activeInstanceId = id;
       }
+      syncSavedBaseline();
       closeModals();
       switchSidebarTab('instances');
       showToast(`Created instance '${id}'`);
@@ -2185,6 +2343,7 @@
           }
         }
       } catch (e) {}
+      syncSavedBaseline();
       closeModals();
       switchSidebarTab('instances');
       showToast(`Generated ${envs.length} environment instances!`);
